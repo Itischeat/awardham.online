@@ -14,7 +14,23 @@ async function parseClubAwards(page, baseUrl) {
     const awardsUrl = `${baseUrl}/account/awards.php`;
 
     try {
-        await page.goto(awardsUrl, { waitUntil: 'networkidle2' });
+        // Повторные попытки при сетевых ошибках
+        let retries = 3;
+        let success = false;
+        while (retries > 0 && !success) {
+            try {
+                await page.goto(awardsUrl, { waitUntil: 'networkidle2', timeout: 90000 });
+                success = true;
+            } catch (navError) {
+                retries--;
+                if (retries > 0) {
+                    console.log(`   Ошибка подключения (клубные), повтор... (осталось ${retries} попыток)`);
+                    await page.waitForTimeout(3000);
+                } else {
+                    throw navError;
+                }
+            }
+        }
 
         // Кликаем на вкладку "Club and Regional Awards"
         const clubTab = await page.$('a[href*="crawards"], a[href*="#crawards"]');

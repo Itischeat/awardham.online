@@ -7,7 +7,7 @@ const { readCache, writeCache } = require('./cache');
 const BASE_URL = 'https://hamlog.online';
 
 // Количество параллельных вкладок для проверки дипломов
-const CONCURRENT_TABS = parseInt(process.env.CONCURRENT_TABS) || 3;
+const CONCURRENT_TABS = parseInt(process.env.CONCURRENT_TABS) || 2;
 
 /**
  * Настройка страницы для проверки дипломов: блокировка ненужных ресурсов
@@ -118,13 +118,16 @@ async function parseAllDiplomas(callsign, callbacks) {
     try {
         browser = await puppeteer.launch({
             headless: 'new',
-            protocolTimeout: 60000,
+            protocolTimeout: 180000,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-accelerated-2d-canvas',
                 '--disable-gpu',
+                '--single-process',
+                '--no-zygote',
+                '--js-flags=--max-old-space-size=512',
                 '--window-size=1920,1080'
             ]
         });

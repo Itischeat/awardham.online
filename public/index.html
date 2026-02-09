@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ham Radio Diplomas Checker | HAMLOG Parser</title>
+    <meta name="description" content="Проверка дипломов радиолюбителя по позывному на hamlog.online">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">📡</span>
+                    <h1>Ham Radio Diplomas</h1>
+                </div>
+                <p class="subtitle">Проверка дипломов с HAMLOG.online</p>
+            </div>
+            <div class="header-bg"></div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Search Section -->
+            <section class="search-section" id="searchSection">
+                <div class="search-card">
+                    <h2>Введите позывной</h2>
+                    <p>Проверьте статус всех дипломов для вашего или любого другого позывного</p>
+
+                    <form class="search-form" id="searchForm">
+                        <div class="input-wrapper">
+                            <input type="text" id="callsignInput" placeholder="Например: R3DIV" autocomplete="off"
+                                spellcheck="false" pattern="[A-Za-z0-9/]+" required>
+                            <button type="submit" id="searchBtn">
+                                <span class="btn-text">Проверить</span>
+                                <span class="btn-icon">🔍</span>
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="hints">
+                        <span class="hint-item">💡 Примеры: R3DIV, UA3AAA, RW1AI</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Progress Section (now includes live results) -->
+            <section class="progress-section hidden" id="progressSection">
+                <div class="progress-card">
+                    <div class="progress-header">
+                        <h3>Проверяем позывной: <span id="currentCallsign">-</span></h3>
+                        <button class="cancel-btn" id="cancelBtn" title="Отменить">✕</button>
+                    </div>
+
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar"></div>
+                        <span class="progress-text" id="progressText">0%</span>
+                    </div>
+
+                    <div class="progress-details">
+                        <div class="progress-stat">
+                            <span class="stat-label">Дипломов:</span>
+                            <span class="stat-value" id="checkedCount">0</span>
+                            <span class="stat-separator">/</span>
+                            <span class="stat-value" id="totalCount">0</span>
+                        </div>
+                        <div class="progress-category">
+                            <span class="category-label">Текущая категория:</span>
+                            <span class="category-value" id="currentCategory">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Stats (visible during parsing) -->
+                <div class="stats-grid live-stats">
+                    <div class="stat-card stat-total">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="liveStatTotal">0</span>
+                            <span class="stat-label">Наград</span>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-received">
+                        <div class="stat-icon">🏆</div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="liveStatReceived">0</span>
+                            <span class="stat-label">Получено</span>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-progress">
+                        <div class="stat-icon">⏳</div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="liveStatProgress">0</span>
+                            <span class="stat-label">В процессе</span>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-not-received">
+                        <div class="stat-icon">📋</div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="liveStatNotReceived">0</span>
+                            <span class="stat-label">Не получено</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Filters -->
+                <div class="filters">
+                    <button class="filter-btn active" data-filter="all">Все</button>
+                    <button class="filter-btn" data-filter="received">🏆 Получено</button>
+                    <button class="filter-btn" data-filter="in_progress">⏳ В процессе</button>
+                    <button class="filter-btn" data-filter="not_received">📋 Не получено</button>
+                </div>
+
+                <!-- Live Results List -->
+                <div class="results-list" id="liveResultsList">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🔍</div>
+                        <h3>Поиск дипломов...</h3>
+                        <p>Результаты будут появляться по мере обработки</p>
+                    </div>
+                </div>
+
+                <!-- Live Pagination -->
+                <div class="pagination" id="livePagination">
+                    <button class="page-btn" id="livePrevPage">← Назад</button>
+                    <span class="page-info" id="livePageInfo">Страница 1 из 1</span>
+                    <button class="page-btn" id="liveNextPage">Вперёд →</button>
+                </div>
+            </section>
+
+            <!-- Results Section (shown after completion) -->
+            <section class="results-section hidden" id="resultsSection">
+                <!-- Completion Banner -->
+                <div class="completion-banner">
+                    <span class="completion-icon">✅</span>
+                    <span class="completion-text">Проверка завершена для позывного <strong
+                            id="completedCallsign">-</strong></span>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card stat-total">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="statTotal">0</span>
+                            <span class="stat-label">Всего наград</span>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-received">
+                        <div class="stat-icon">🏆</div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="statReceived">0</span>
+                            <span class="stat-label">Получено</span>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-progress">
+                        <div class="stat-icon">⏳</div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="statProgress">0</span>
+                            <span class="stat-label">В процессе</span>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-not-received">
+                        <div class="stat-icon">📋</div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="statNotReceived">0</span>
+                            <span class="stat-label">Не получено</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="filters" id="finalFilters">
+                    <button class="filter-btn active" data-filter="all">Все</button>
+                    <button class="filter-btn" data-filter="received">🏆 Получено</button>
+                    <button class="filter-btn" data-filter="in_progress">⏳ В процессе</button>
+                    <button class="filter-btn" data-filter="not_received">📋 Не получено</button>
+                </div>
+
+                <!-- Results List -->
+                <div class="results-list" id="resultsList">
+                    <!-- Diplomas will be rendered here -->
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination" id="pagination">
+                    <button class="page-btn" id="prevPage">← Назад</button>
+                    <span class="page-info" id="pageInfo">Страница 1 из 1</span>
+                    <button class="page-btn" id="nextPage">Вперёд →</button>
+                </div>
+
+                <!-- New Search Button -->
+                <div class="new-search">
+                    <button class="new-search-btn" id="newSearchBtn">
+                        <span>🔄</span> Новый поиск
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Данные с <a href="https://hamlog.online" target="_blank">HAMLOG.online</a></p>
+            <p class="copyright">© 2026 Ham Radio Diplomas Checker</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

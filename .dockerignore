@@ -1,0 +1,22 @@
+# Игнорируем node_modules (устанавливаем в контейнере)
+node_modules
+npm-debug.log
+
+# Игнорируем локальные данные
+data/
+
+# Игнорируем Git
+.git
+.gitignore
+
+# Игнорируем конфиги разработки
+.env.local
+.env.development
+
+# Игнорируем IDE
+.vscode
+.idea
+
+# README и документация (не нужны в образе)
+README.md
+docs/

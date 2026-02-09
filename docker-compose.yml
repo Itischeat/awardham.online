@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # Приложение Ham Radio Diplomas Parser
+  app:
+    build: .
+    container_name: hamlog-parser
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - hamlog-network
+
+  # Redis для кэширования
+  redis:
+    image: redis:7-alpine
+    container_name: hamlog-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - hamlog-network
+
+networks:
+  hamlog-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local

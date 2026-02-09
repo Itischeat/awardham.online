@@ -1,0 +1,24 @@
+{
+    "name": "hamlog-diplomas-parser",
+    "version": "1.0.0",
+    "description": "Парсер дипломов радиолюбителей с hamlog.online",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js",
+        "dev": "node server.js"
+    },
+    "dependencies": {
+        "express": "^4.18.2",
+        "puppeteer": "^21.6.1",
+        "cors": "^2.8.5",
+        "redis": "^4.6.12"
+    },
+    "keywords": [
+        "hamlog",
+        "ham radio",
+        "diplomas",
+        "parser"
+    ],
+    "author": "",
+    "license": "MIT"
+}

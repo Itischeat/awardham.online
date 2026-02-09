@@ -7,7 +7,7 @@ const { readCache, writeCache } = require('./cache');
 const BASE_URL = 'https://hamlog.online';
 
 // Количество параллельных вкладок для проверки дипломов
-const CONCURRENT_TABS = 5;
+const CONCURRENT_TABS = parseInt(process.env.CONCURRENT_TABS) || 3;
 
 /**
  * Настройка страницы для проверки дипломов: блокировка ненужных ресурсов
@@ -118,6 +118,7 @@ async function parseAllDiplomas(callsign, callbacks) {
     try {
         browser = await puppeteer.launch({
             headless: 'new',
+            protocolTimeout: 60000,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',

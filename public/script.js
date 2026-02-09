@@ -126,7 +126,14 @@ async function handleSearch(e) {
         });
 
         if (!response.ok) {
-            throw new Error('Ошибка запуска проверки');
+            const errorData = await response.json().catch(() => null);
+            if (response.status === 429 && errorData) {
+                showToast(errorData.error, 'warning');
+                searchBtn.disabled = false;
+                searchBtn.querySelector('.btn-text').textContent = 'Проверить';
+                return;
+            }
+            throw new Error(errorData?.error || 'Ошибка запуска проверки');
         }
 
         const data = await response.json();
@@ -489,6 +496,12 @@ function handleCancel() {
         clearInterval(pollingInterval);
         pollingInterval = null;
     }
+
+    // Уведомляем сервер об отмене
+    if (currentSessionId) {
+        fetch(`/api/cancel/${currentSessionId}`, { method: 'POST' }).catch(() => { });
+    }
+
     currentSessionId = null;
     currentCallsign = null;
     handleNewSearch();
@@ -504,6 +517,13 @@ function handleNewSearch() {
     callsignInput.value = '';
     callsignInput.focus();
 }
+
+// При закрытии вкладки — отмена парсинга
+window.addEventListener('beforeunload', () => {
+    if (currentSessionId && !isCompleted) {
+        navigator.sendBeacon(`/api/cancel/${currentSessionId}`);
+    }
+});
 
 // ==================================================
 // Utilities
@@ -530,7 +550,7 @@ function showToast(message, type = 'info') {
         bottom: 2rem;
         left: 50%;
         transform: translateX(-50%);
-        background: ${type === 'error' ? '#ef4444' : '#3b82f6'};
+        background: ${type === 'error' ? '#ef4444' : type === 'warning' ? '#f59e0b' : '#3b82f6'};
         color: white;
         padding: 1rem 2rem;
         border-radius: 8px;
@@ -567,9 +587,49 @@ style.textContent = `
 document.head.appendChild(style);
 
 // ==================================================
+// Server Status Indicator
+// ==================================================
+
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+let statusInterval = null;
+
+async function updateServerStatus() {
+    try {
+        const response = await fetch('/api/server-status');
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const { activeParsings, maxConcurrent, isBusy } = data;
+
+        // Update dot color
+        statusDot.className = 'status-dot';
+        if (activeParsings === 0) {
+            statusDot.classList.add('free');
+            statusText.textContent = 'Сервер свободен';
+        } else if (isBusy) {
+            statusDot.classList.add('full');
+            statusText.textContent = `Занято ${activeParsings}/${maxConcurrent} — очередь`;
+        } else {
+            statusDot.classList.add('busy');
+            statusText.textContent = `Активно ${activeParsings}/${maxConcurrent}`;
+        }
+    } catch (error) {
+        statusText.textContent = 'Нет связи';
+        statusDot.className = 'status-dot';
+    }
+}
+
+function startStatusPolling() {
+    updateServerStatus();
+    statusInterval = setInterval(updateServerStatus, 5000);
+}
+
+// ==================================================
 // Initialize
 // ==================================================
 
 document.addEventListener('DOMContentLoaded', () => {
     callsignInput.focus();
+    startStatusPolling();
 });

@@ -290,6 +290,59 @@ body {
     font-size: 0.875rem;
 }
 
+/* Server Status Indicator */
+.server-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    font-size: 0.8rem;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+    transition: var(--transition-normal);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: var(--transition-normal);
+}
+
+.status-dot.free {
+    background: var(--color-received);
+    box-shadow: 0 0 8px var(--color-received);
+    animation: statusPulse 2s ease-in-out infinite;
+}
+
+.status-dot.busy {
+    background: var(--color-progress);
+    box-shadow: 0 0 8px var(--color-progress);
+    animation: statusPulse 1.5s ease-in-out infinite;
+}
+
+.status-dot.full {
+    background: var(--color-error);
+    box-shadow: 0 0 8px var(--color-error);
+    animation: statusPulse 1s ease-in-out infinite;
+}
+
+.status-text {
+    color: var(--text-muted);
+}
+
+@keyframes statusPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
 /* ============================================
    Progress Section
    ============================================ */

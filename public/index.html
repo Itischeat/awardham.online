@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ham Radio Diplomas Checker | HAMLOG Parser</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
     <meta name="description" content="Проверка дипломов радиолюбителя по позывному на hamlog.online">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -47,6 +49,11 @@
 
                     <div class="hints">
                         <span class="hint-item">💡 Примеры: R3DIV, UA3AAA, RW1AI</span>
+                    </div>
+
+                    <div class="server-status" id="serverStatus">
+                        <span class="status-dot" id="statusDot"></span>
+                        <span class="status-text" id="statusText">Загрузка...</span>
                     </div>
                 </div>
             </section>

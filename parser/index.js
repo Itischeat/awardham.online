@@ -107,8 +107,9 @@ function translateToRussian(text) {
  * @param {object} callbacks - Объект с колбэками
  * @param {function} callbacks.onProgress - Колбэк прогресса
  * @param {function} callbacks.onDiplomaResult - Колбэк результата диплома
+ * @param {AbortSignal} [abortSignal] - Сигнал отмены при отключении клиента
  */
-async function parseAllDiplomas(callsign, callbacks) {
+async function parseAllDiplomas(callsign, callbacks, abortSignal) {
     const { onProgress, onDiplomaResult } = callbacks;
 
     console.log(`🔍 Начинаем парсинг для позывного: ${callsign}`);
@@ -198,13 +199,20 @@ async function parseAllDiplomas(callsign, callbacks) {
 
         const checkPromises = allDiplomas.map(diploma =>
             workerPool.execute(async (page) => {
+                // Проверяем не отменён ли парсинг (клиент ушёл)
+                if (abortSignal && abortSignal.aborted) {
+                    throw new DOMException('Парсинг отменён', 'AbortError');
+                }
+
                 try {
                     const results = await checkDiploma(page, diploma, callsign);
-                    // checkDiploma возвращает массив результатов (по одному на каждую award карточку)
                     for (const result of results) {
                         onDiplomaResult(result);
                     }
                 } catch (error) {
+                    if (abortSignal && abortSignal.aborted) {
+                        throw new DOMException('Парсинг отменён', 'AbortError');
+                    }
                     console.error(`   Ошибка проверки ${diploma.name}:`, error.message);
                     onDiplomaResult({
                         ...diploma,

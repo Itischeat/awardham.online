@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # Nginx - реверс-прокси
+  nginx:
+    image: nginx:alpine
+    container_name: hamlog-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot-conf:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+    depends_on:
+      - app
+    networks:
+      - hamlog-network
+
+  # Приложение Ham Radio Diplomas Parser
+  app:
+    build: .
+    container_name: hamlog-parser
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - hamlog-network
+
+  # Redis для кэширования
+  redis:
+    image: redis:7-alpine
+    container_name: hamlog-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - hamlog-network
+
+  # Certbot для SSL-сертификатов
+  certbot:
+    image: certbot/certbot
+    container_name: hamlog-certbot
+    volumes:
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+networks:
+  hamlog-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local
+  certbot-conf:
+    driver: local
+  certbot-www:
+    driver: local

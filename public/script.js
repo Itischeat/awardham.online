@@ -592,6 +592,7 @@ document.head.appendChild(style);
 
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
+const appVersion = document.getElementById('appVersion');
 let statusInterval = null;
 
 async function updateServerStatus() {
@@ -613,6 +614,11 @@ async function updateServerStatus() {
         } else {
             statusDot.classList.add('busy');
             statusText.textContent = `Активно ${activeParsings}/${maxConcurrent}`;
+        }
+
+        // Обновляем версию из package.json
+        if (data.version && appVersion) {
+            appVersion.textContent = `v${data.version}`;
         }
     } catch (error) {
         statusText.textContent = 'Нет связи';

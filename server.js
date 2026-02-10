@@ -6,6 +6,7 @@ const { clearCache, getCacheInfo } = require('./parser/cache');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const APP_VERSION = require('./package.json').version;
 
 // Middleware
 app.use(cors());
@@ -226,10 +227,24 @@ setInterval(() => {
 
 // API: Статус сервера (активные парсинги)
 app.get('/api/server-status', (req, res) => {
+    // Пересчитываем из реальных данных — страховка от рассинхрона счётчика
+    let realActive = 0;
+    for (const session of parsingSessions.values()) {
+        if (session.status === 'parsing' || session.status === 'started') {
+            realActive++;
+        }
+    }
+
+    if (activeParsings !== realActive) {
+        console.log(`⚠️ Счётчик рассинхронизирован: ${activeParsings} → ${realActive}`);
+        activeParsings = realActive;
+    }
+
     res.json({
         activeParsings,
         maxConcurrent: MAX_CONCURRENT,
-        isBusy: activeParsings >= MAX_CONCURRENT
+        isBusy: activeParsings >= MAX_CONCURRENT,
+        version: APP_VERSION
     });
 });
 

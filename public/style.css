@@ -157,6 +157,20 @@ body {
     background-clip: text;
 }
 
+.version-badge {
+    font-size: 0.7rem;
+    font-weight: 500;
+    background: rgba(59, 130, 246, 0.2);
+    -webkit-background-clip: unset;
+    -webkit-text-fill-color: var(--accent-primary-light);
+    background-clip: unset;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    vertical-align: middle;
+    letter-spacing: 0.03em;
+}
+
 .subtitle {
     color: var(--text-secondary);
     font-size: 1rem;
@@ -339,8 +353,15 @@ body {
 }
 
 @keyframes statusPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.4;
+    }
 }
 
 /* ============================================

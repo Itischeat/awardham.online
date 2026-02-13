@@ -127,8 +127,6 @@ async function parseAllDiplomas(callsign, callbacks, abortSignal) {
                 '--disable-dev-shm-usage',
                 '--disable-accelerated-2d-canvas',
                 '--disable-gpu',
-                '--single-process',
-                '--no-zygote',
                 '--js-flags=--max-old-space-size=512',
                 '--window-size=1920,1080'
             ]

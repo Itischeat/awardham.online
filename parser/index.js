@@ -1,6 +1,7 @@
 const puppeteer = require('puppeteer');
 const { parseClubAwards } = require('./clubAwards');
 const { parseTerritoryAwards } = require('./territoryAwards');
+const { parseGlobalAwards } = require('./globalAwards');
 const { WorkerPool } = require('./workerPool');
 const { readCache, writeCache } = require('./cache');
 
@@ -149,16 +150,23 @@ async function parseAllDiplomas(callsign, callbacks, abortSignal) {
             const mainPage = await browser.newPage();
             await setupMainPage(mainPage);
 
+            // Получаем все дипломы из вкладки 1 (Global and National)
+            console.log('📋 Собираем глобальные и национальные дипломы...');
+            onProgress({ percent: 1, total: 0, checked: 0, currentCategory: 'Глобальные и национальные дипломы' });
+
+            const globalDiplomas = await parseGlobalAwards(mainPage, BASE_URL);
+            console.log(`   Найдено ${globalDiplomas.length} глобальных дипломов`);
+
             // Получаем все дипломы из вкладки 2 (Club and Regional)
             console.log('📋 Собираем клубные и региональные дипломы...');
-            onProgress({ percent: 3, total: 0, checked: 0, currentCategory: 'Клубные и региональные дипломы' });
+            onProgress({ percent: 4, total: 0, checked: 0, currentCategory: 'Клубные и региональные дипломы' });
 
             const clubDiplomas = await parseClubAwards(mainPage, BASE_URL);
             console.log(`   Найдено ${clubDiplomas.length} клубных дипломов`);
 
             // Получаем все дипломы из вкладки 3 (Territory)
             console.log('📋 Собираем территориальные дипломы...');
-            onProgress({ percent: 7, total: 0, checked: 0, currentCategory: 'Территориальные дипломы' });
+            onProgress({ percent: 8, total: 0, checked: 0, currentCategory: 'Территориальные дипломы' });
 
             const territoryDiplomas = await parseTerritoryAwards(mainPage, BASE_URL);
             console.log(`   Найдено ${territoryDiplomas.length} территориальных дипломов`);
@@ -166,8 +174,15 @@ async function parseAllDiplomas(callsign, callbacks, abortSignal) {
             // Закрываем основную страницу - больше не нужна
             await mainPage.close();
 
-            // Объединяем все дипломы
-            allDiplomas = [...clubDiplomas, ...territoryDiplomas];
+            // Объединяем все дипломы (дедупликация по URL)
+            const seen = new Set();
+            allDiplomas = [];
+            for (const dp of [...globalDiplomas, ...clubDiplomas, ...territoryDiplomas]) {
+                if (!seen.has(dp.url)) {
+                    seen.add(dp.url);
+                    allDiplomas.push(dp);
+                }
+            }
 
             // Сохраняем в кэш для будущих запросов
             if (allDiplomas.length > 0) {
@@ -263,94 +278,139 @@ async function parseAllDiplomas(callsign, callbacks, abortSignal) {
  * @returns {object} - Результат проверки
  */
 async function checkDiploma(page, diploma, callsign) {
-    try {
-        await page.goto(diploma.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY = 3000; // 3 секунды между попытками
+    const ATTEMPT_TIMEOUT = 45000; // 45 секунд на каждую попытку
 
-        // Ждём загрузки страницы
-        await page.waitForSelector('body', { timeout: 10000 });
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            // Сбрасываем страницу перед каждой попыткой (кроме первой)
+            if (attempt > 0) {
+                await page.goto('about:blank', { timeout: 5000 }).catch(() => { });
+            }
 
-        // Ищем форму ввода позывного (hamlog.online использует разные варианты)
-        const inputSelectors = [
-            'input[name="callsign"]',
-            'input[name="call"]',
-            'input#callsign',
-            'input#call',
-            'input.form-control[type="text"]',
-            'input[type="text"][placeholder*="call" i]',
-            'input[type="text"][placeholder*="Call" i]',
-            'input[type="text"][placeholder*="позывн" i]',
-            '.callsign-input',
-            'form input[type="text"]'
+            // Оборачиваем попытку в таймаут, чтобы не зависать
+            const result = await Promise.race([
+                checkDiplomaAttempt(page, diploma, callsign),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Attempt timeout: превышено время ожидания')), ATTEMPT_TIMEOUT)
+                )
+            ]);
+
+            return result;
+
+        } catch (error) {
+            // Проверяем, можно ли повторить попытку
+            const isRetryable = error.message &&
+                (error.message.includes('ERR_CONNECTION_REFUSED') ||
+                    error.message.includes('ERR_CONNECTION_RESET') ||
+                    error.message.includes('ERR_CONNECTION_TIMED_OUT') ||
+                    error.message.includes('ERR_NETWORK_CHANGED') ||
+                    error.message.includes('ETIMEDOUT') ||
+                    error.message.includes('ECONNREFUSED') ||
+                    error.message.includes('timed out') ||
+                    error.message.includes('Timeout') ||
+                    error.message.includes('timeout') ||
+                    error.message.includes('protocolTimeout'));
+
+            if (isRetryable && attempt < MAX_RETRIES) {
+                console.log(`   🔄 Ретрай ${attempt + 1}/${MAX_RETRIES} для ${diploma.name} (${error.message})`);
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                continue;
+            }
+
+            console.error(`   ❌ Ошибка при проверке ${diploma.name} (попытка ${attempt + 1}/${MAX_RETRIES + 1}):`, error.message);
+            // Возвращаем массив с одним результатом ошибки (для единообразия)
+            return [{
+                ...diploma,
+                status: 'error',
+                error: error.message,
+                awards: []
+            }];
+        }
+    }
+}
+
+/**
+ * Одна попытка проверки диплома (без ретраев)
+ */
+async function checkDiplomaAttempt(page, diploma, callsign) {
+    await page.goto(diploma.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+    // Ждём загрузки страницы
+    await page.waitForSelector('body', { timeout: 10000 });
+
+    // Ищем форму ввода позывного (hamlog.online использует разные варианты)
+    const inputSelectors = [
+        'input[name="callsign"]',
+        'input[name="call"]',
+        'input#callsign',
+        'input#call',
+        'input.form-control[type="text"]',
+        'input[type="text"][placeholder*="call" i]',
+        'input[type="text"][placeholder*="Call" i]',
+        'input[type="text"][placeholder*="позывн" i]',
+        '.callsign-input',
+        'form input[type="text"]'
+    ];
+
+    let callsignInput = null;
+    for (const selector of inputSelectors) {
+        callsignInput = await page.$(selector);
+        if (callsignInput) break;
+    }
+
+    if (callsignInput) {
+        // Очищаем поле и вводим позывной
+        await callsignInput.click({ clickCount: 3 });
+        await callsignInput.type(callsign); // Без задержки между символами
+
+        // Ищем кнопку отправки
+        const buttonSelectors = [
+            'button[type="submit"]',
+            'input[type="submit"]',
+            'button.btn-primary',
+            'button.btn',
+            '.btn-check',
+            'button.submit',
+            'form button'
         ];
 
-        let callsignInput = null;
-        for (const selector of inputSelectors) {
-            callsignInput = await page.$(selector);
-            if (callsignInput) break;
+        let submitButton = null;
+        for (const selector of buttonSelectors) {
+            submitButton = await page.$(selector);
+            if (submitButton) break;
         }
 
-        if (callsignInput) {
-            // Очищаем поле и вводим позывной
-            await callsignInput.click({ clickCount: 3 });
-            await callsignInput.type(callsign); // Без задержки между символами
-
-            // Ищем кнопку отправки
-            const buttonSelectors = [
-                'button[type="submit"]',
-                'input[type="submit"]',
-                'button.btn-primary',
-                'button.btn',
-                '.btn-check',
-                'button.submit',
-                'form button'
-            ];
-
-            let submitButton = null;
-            for (const selector of buttonSelectors) {
-                submitButton = await page.$(selector);
-                if (submitButton) break;
-            }
-
-            if (submitButton) {
-                // Страница перезагружается после submit - ждём навигацию!
-                await Promise.all([
-                    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
-                    submitButton.click()
-                ]).catch(() => { });
-            } else {
-                // Пробуем отправить форму через Enter
-                await Promise.all([
-                    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
-                    callsignInput.press('Enter')
-                ]).catch(() => { });
-            }
-
-            // Ждём появления результатов (минимальная задержка)
-            await page.waitForTimeout(500);
-
-            // Парсим результаты
-            return await parseResults(page, diploma, callsign);
+        if (submitButton) {
+            // Страница перезагружается после submit - ждём навигацию!
+            await Promise.all([
+                page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+                submitButton.click()
+            ]).catch(() => { });
         } else {
-            // Нет формы ввода - пробуем альтернативные URL
-            const urlWithCallsign = diploma.url.includes('?')
-                ? `${diploma.url}&callsign=${callsign}`
-                : `${diploma.url}?callsign=${callsign}`;
-
-            await page.goto(urlWithCallsign, { waitUntil: 'domcontentloaded', timeout: 30000 });
-            await page.waitForTimeout(500);
-
-            return await parseResults(page, diploma, callsign);
+            // Пробуем отправить форму через Enter
+            await Promise.all([
+                page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+                callsignInput.press('Enter')
+            ]).catch(() => { });
         }
 
-    } catch (error) {
-        console.error(`   Ошибка при проверке ${diploma.name}:`, error.message);
-        // Возвращаем массив с одним результатом ошибки (для единообразия)
-        return [{
-            ...diploma,
-            status: 'error',
-            error: error.message,
-            awards: []
-        }];
+        // Ждём появления результатов (минимальная задержка)
+        await page.waitForTimeout(500);
+
+        // Парсим результаты
+        return await parseResults(page, diploma, callsign);
+    } else {
+        // Нет формы ввода - пробуем альтернативные URL
+        const urlWithCallsign = diploma.url.includes('?')
+            ? `${diploma.url}&callsign=${callsign}`
+            : `${diploma.url}?callsign=${callsign}`;
+
+        await page.goto(urlWithCallsign, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(500);
+
+        return await parseResults(page, diploma, callsign);
     }
 }
 
@@ -491,11 +551,15 @@ async function parseResults(page, diploma, callsign) {
             // Materialize CSS цвета: green, teal = успех; red = неудача
             const isGreen = classes.includes('green') || classes.includes('teal') || classes.includes('cyan');
             const isRed = classes.includes('red') || classes.includes('orange') || classes.includes('amber');
-            const hasIssuedText = /выдан|Успешно|issued|awarded/i.test(text);
+            const hasIssuedText = /выдан|issued|awarded/i.test(text);
+            const hasCompletedText = /Успешно выполнен/i.test(text);
             const hasNotEnoughStatus = /недостаточно|enough points|not enough/i.test(text);
 
-            if (isGreen || hasIssuedText) {
-                // Зелёная/бирюзовая карточка ИЛИ текст "выдан" = получено
+            if (hasIssuedText) {
+                // Текст "выдан" / "issued" = выдано
+                cardStatus = 'issued';
+            } else if (isGreen || hasCompletedText) {
+                // Зелёная/бирюзовая карточка без текста "выдан" = получено
                 cardStatus = 'received';
             } else if (isRed || hasNotEnoughStatus) {
                 // Красная карточка = проверяем прогресс
@@ -534,7 +598,7 @@ async function parseResults(page, diploma, callsign) {
     for (const card of cardResults) {
         awards.push({
             name: card.name,
-            awarded: card.status === 'received',
+            awarded: card.status === 'received' || card.status === 'issued',
             progress: card.progress,
             status: card.status,
             current: card.current,
@@ -588,8 +652,9 @@ async function parseResults(page, diploma, callsign) {
                 url: diploma.url,
                 organization: diploma.organization || null,
                 category: diploma.category || null,
-                status: award.awarded ? 'received' :
-                    (award.current > 0 ? 'in_progress' : 'not_received'),
+                status: award.status === 'issued' ? 'issued' :
+                    (award.awarded ? 'received' :
+                        (award.current > 0 ? 'in_progress' : 'not_received')),
                 progress: award.progress || null,
                 callsign
             }));
@@ -613,7 +678,9 @@ async function parseResults(page, diploma, callsign) {
             } else {
                 status = 'in_progress';
             }
-        } else if (/awarded|получен|выдан|congratulations|поздравляем|certificate.*issued|диплом.*выдан/i.test(text)) {
+        } else if (/выдан|issued|awarded|диплом.*выдан|certificate.*issued/i.test(text)) {
+            status = 'issued';
+        } else if (/получен|congratulations|поздравляем/i.test(text)) {
             status = 'received';
         } else if (/недостаточно|not enough/i.test(text)) {
             // "Недостаточно" без прогресса = не начато

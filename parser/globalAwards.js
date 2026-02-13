@@ -1,16 +1,15 @@
 /**
- * Парсер клубных и региональных дипломов (вкладка 2)
- * Стратегия: переключаем DataTables на показ всех записей,
- * затем собираем все ссылки на дипломы за один проход
+ * Парсер глобальных и национальных дипломов (вкладка 1)
+ * Структура: DataTables таблица + отдельные программы
  */
 
 /**
- * Собирает все клубные и региональные дипломы
+ * Собирает все глобальные и национальные дипломы
  * @param {Page} page - Puppeteer page
  * @param {string} baseUrl - Базовый URL сайта
  * @returns {Array} - Массив дипломов
  */
-async function parseClubAwards(page, baseUrl) {
+async function parseGlobalAwards(page, baseUrl) {
     const diplomas = [];
     const awardsUrl = `${baseUrl}/account/awards.php`;
 
@@ -25,7 +24,7 @@ async function parseClubAwards(page, baseUrl) {
             } catch (navError) {
                 retries--;
                 if (retries > 0) {
-                    console.log(`   Ошибка подключения (клубные), повтор... (осталось ${retries} попыток)`);
+                    console.log(`   Ошибка подключения (глобальные), повтор... (осталось ${retries} попыток)`);
                     await page.waitForTimeout(3000);
                 } else {
                     throw navError;
@@ -33,24 +32,19 @@ async function parseClubAwards(page, baseUrl) {
             }
         }
 
-        // Кликаем на вкладку "Club and Regional Awards"
-        const clubTab = await page.$('a[href*="crawards"], a[href*="#crawards"]');
-        if (clubTab) {
-            await clubTab.click();
+        // Кликаем на вкладку "Global and National Awards" (она обычно активна по умолчанию)
+        const globalTab = await page.$('a[href*="gnawards"], a[href*="#gnawards"]');
+        if (globalTab) {
+            await globalTab.click();
             await page.waitForTimeout(2000);
         }
 
         // Переключаем DataTables на показ ВСЕХ записей
-        // DataTables имеет select с опциями длины страницы
         const showAllApplied = await page.evaluate(() => {
-            // Ищем select элемент DataTables внутри вкладки клубных дипломов
             const selects = document.querySelectorAll('select[name*="_length"], .dataTables_length select');
 
             for (const select of selects) {
-                // Проверяем что этот select относится к клубной вкладке
-                const wrapper = select.closest('.tab-pane, .dataTables_wrapper');
-
-                // Пробуем найти опцию "All" или "-1" (показать все)
+                // Пробуем найти опцию "All" / "-1"
                 let allOption = null;
                 for (const option of select.options) {
                     if (option.value === '-1' || option.text.toLowerCase() === 'all' || option.text === 'Все') {
@@ -65,7 +59,7 @@ async function parseClubAwards(page, baseUrl) {
                     return 'all_option';
                 }
 
-                // Если нет опции "All", ставим максимальное значение
+                // Если нет "All", ставим максимальное значение
                 let maxVal = 0;
                 for (const option of select.options) {
                     const v = parseInt(option.value);
@@ -81,17 +75,15 @@ async function parseClubAwards(page, baseUrl) {
             return 'no_select_found';
         });
 
-        console.log(`   DataTables переключение: ${showAllApplied}`);
-
-        // Ждём перерисовки таблицы
+        console.log(`   DataTables (глобальные) переключение: ${showAllApplied}`);
         await page.waitForTimeout(3000);
 
-        // Собираем ВСЕ ссылки на дипломы за один проход
+        // Собираем ВСЕ ссылки на дипломы со страницы
         const allLinks = await page.evaluate((baseUrl) => {
             const results = [];
             const seen = new Set();
 
-            // Ищем все ссылки с числовым ID (дипломы)
+            // Ищем все ссылки с числовым ID (дипломы из таблицы)
             const anchors = document.querySelectorAll('a[href*="/club/"], a[href*="/global/"]');
 
             for (const a of anchors) {
@@ -100,26 +92,21 @@ async function parseClubAwards(page, baseUrl) {
 
                 if (!href || !text) continue;
 
-                // Дипломы имеют числовой ID в конце: /club/arck/1706/ или /global/russia/r3d/172/
+                // Дипломы имеют числовой ID в конце
                 const isDiploma = /\/\d+\/?$/.test(href);
                 if (!isDiploma) continue;
 
-                // Формируем полный URL
                 const fullUrl = href.startsWith('http') ? href : baseUrl + href;
-
-                // Дедупликация по URL
                 if (seen.has(fullUrl)) continue;
                 seen.add(fullUrl);
 
-                // Определяем организацию из предыдущего элемента таблицы (если есть)
+                // Определяем организацию из строки таблицы
                 let organization = null;
                 const row = a.closest('tr');
                 if (row) {
                     const cells = row.querySelectorAll('td');
                     if (cells.length >= 2) {
-                        // Первый столбец — организация, второй — диплом
-                        const orgCell = cells[0];
-                        const orgLink = orgCell.querySelector('a');
+                        const orgLink = cells[0].querySelector('a');
                         if (orgLink && orgLink !== a) {
                             organization = orgLink.innerText.trim();
                         }
@@ -136,28 +123,83 @@ async function parseClubAwards(page, baseUrl) {
             return results;
         }, baseUrl);
 
-        console.log(`   Найдено ${allLinks.length} дипломов на первом проходе`);
+        console.log(`   Найдено ${allLinks.length} глобальных дипломов из таблицы`);
 
-        // Добавляем все найденные дипломы
         for (const dp of allLinks) {
             if (!diplomas.some(d => d.url === dp.url)) {
                 diplomas.push({
                     name: dp.name,
                     url: dp.url,
                     organization: dp.organization,
-                    category: 'Club and Regional'
+                    category: 'Global and National'
+                });
+            }
+        }
+
+        // Также собираем специальные программы (NECA, SIA, RAEM, GB и т.д.)
+        const specialPrograms = await page.evaluate((baseUrl) => {
+            const results = [];
+            const seen = new Set();
+
+            // Специальные URL-паттерны для глобальных программ
+            const specialSelectors = [
+                'a[href*="/neca/"]',
+                'a[href*="/gb/"]',
+                'a[href*="/raem/"]',
+                'a[href*="/sia/"]',
+                'a[href*="/geo/"]',
+                'a[href*="/rrnars/"]',
+                'a[href*="/thefirstinthenation/"]'
+            ];
+
+            for (const selector of specialSelectors) {
+                const anchors = document.querySelectorAll(selector);
+                for (const a of anchors) {
+                    const href = a.getAttribute('href');
+                    const text = a.innerText.trim();
+
+                    if (!href || !text) continue;
+                    // Пропускаем служебные
+                    if (href.includes('/list/') || href.includes('/rules/') ||
+                        href.includes('/activations/') || href.includes('/listreferences/')) continue;
+
+                    const fullUrl = href.startsWith('http') ? href : baseUrl + href;
+                    if (seen.has(fullUrl)) continue;
+                    seen.add(fullUrl);
+
+                    results.push({
+                        url: fullUrl,
+                        name: text
+                    });
+                }
+            }
+
+            return results;
+        }, baseUrl);
+
+        console.log(`   Найдено ${specialPrograms.length} специальных программ`);
+
+        // Специальные программы не добавляем если уже есть в территориальных
+        // (geo/ ссылки могут пересекаться)
+        for (const sp of specialPrograms) {
+            if (!diplomas.some(d => d.url === sp.url)) {
+                diplomas.push({
+                    name: sp.name,
+                    url: sp.url,
+                    organization: null,
+                    category: 'Global and National'
                 });
             }
         }
 
         // Если DataTables не показал все — пробуем пагинацию
-        if (showAllApplied === 'no_select_found' || diplomas.length < 500) {
-            console.log(`   Пагинация: собрано ${diplomas.length}, пробуем листать страницы...`);
+        if (showAllApplied === 'no_select_found' || allLinks.length < 100) {
+            console.log(`   Пагинация (глобальные): пробуем листать...`);
             await collectFromPagination(page, baseUrl, diplomas);
         }
 
     } catch (error) {
-        console.error('Ошибка при парсинге клубных дипломов:', error);
+        console.error('Ошибка при парсинге глобальных дипломов:', error);
     }
 
     return diplomas;
@@ -172,12 +214,9 @@ async function collectFromPagination(page, baseUrl, diplomas) {
 
     while (pagesProcessed < maxPages) {
         try {
-            // Ищем кнопку "Следующая" (Next)
             const nextBtn = await page.$('.dataTables_paginate .next:not(.disabled), .paginate_button.next:not(.disabled)');
-
             if (!nextBtn) break;
 
-            // Проверяем что кнопка не disabled
             const isDisabled = await page.evaluate(el => {
                 return el.classList.contains('disabled') || el.getAttribute('aria-disabled') === 'true';
             }, nextBtn);
@@ -187,7 +226,6 @@ async function collectFromPagination(page, baseUrl, diplomas) {
             await nextBtn.click();
             await page.waitForTimeout(1500);
 
-            // Собираем дипломы с текущей страницы
             const pageLinks = await page.evaluate((baseUrl) => {
                 const results = [];
                 const anchors = document.querySelectorAll('a[href*="/club/"], a[href*="/global/"]');
@@ -226,22 +264,21 @@ async function collectFromPagination(page, baseUrl, diplomas) {
                         name: dp.name,
                         url: dp.url,
                         organization: dp.organization,
-                        category: 'Club and Regional'
+                        category: 'Global and National'
                     });
                     newCount++;
                 }
             }
 
             pagesProcessed++;
-            console.log(`   Страница ${pagesProcessed + 1}: +${newCount} дипломов (всего ${diplomas.length})`);
+            console.log(`   Страница ${pagesProcessed + 1} (глобальные): +${newCount} дипломов (всего ${diplomas.length})`);
 
             if (newCount === 0) break;
 
         } catch (error) {
-            console.error(`   Ошибка пагинации на странице ${pagesProcessed + 1}:`, error.message);
             break;
         }
     }
 }
 
-module.exports = { parseClubAwards };
+module.exports = { parseGlobalAwards };

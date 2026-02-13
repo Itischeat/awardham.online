@@ -20,8 +20,8 @@ const parsingSessions = new Map();
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT) || 2;
 let activeParsings = 0;
 
-// Heartbeat: если клиент не шлёт пинг 45 секунд — сессия считается брошенной
-const HEARTBEAT_TIMEOUT = 45 * 1000;
+// Heartbeat: если клиент не шлёт пинг 90 секунд — сессия считается брошенной
+const HEARTBEAT_TIMEOUT = 90 * 1000;
 
 // API: Начать проверку позывного
 app.post('/api/check-callsign', async (req, res) => {
@@ -135,8 +135,8 @@ app.get('/api/results/:sessionId', (req, res) => {
     }
 
     // Сортировка: полученные сверху, потом в процессе, потом не получены
-    const statusOrder = { 'received': 0, 'in_progress': 1, 'not_received': 2 };
-    results.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
+    const statusOrder = { 'issued': 0, 'received': 1, 'in_progress': 2, 'not_received': 3, 'error': 4 };
+    results.sort((a, b) => (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99));
 
     // Пагинация
     const pageNum = parseInt(page);
@@ -145,12 +145,13 @@ app.get('/api/results/:sessionId', (req, res) => {
     const endIndex = startIndex + limitNum;
     const paginatedResults = results.slice(startIndex, endIndex);
 
-    // Статистика
     const stats = {
         total: session.results.length,
+        issued: session.results.filter(r => r.status === 'issued').length,
         received: session.results.filter(r => r.status === 'received').length,
         inProgress: session.results.filter(r => r.status === 'in_progress').length,
-        notReceived: session.results.filter(r => r.status === 'not_received').length
+        notReceived: session.results.filter(r => r.status === 'not_received').length,
+        errors: session.results.filter(r => r.status === 'error').length
     };
 
     res.json({
@@ -246,6 +247,45 @@ app.get('/api/server-status', (req, res) => {
         isBusy: activeParsings >= MAX_CONCURRENT,
         version: APP_VERSION
     });
+});
+
+// Проверка доступности hamlog.online
+let originStatus = { online: true, lastCheck: 0, responseTime: 0 };
+const ORIGIN_CHECK_INTERVAL = 30 * 1000; // Проверяем каждые 30 секунд
+
+async function checkOriginHealth() {
+    try {
+        const start = Date.now();
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch('https://hamlog.online', {
+            method: 'HEAD',
+            signal: controller.signal
+        });
+        clearTimeout(timeout);
+
+        originStatus = {
+            online: response.ok,
+            lastCheck: Date.now(),
+            responseTime: Date.now() - start
+        };
+    } catch (error) {
+        originStatus = {
+            online: false,
+            lastCheck: Date.now(),
+            responseTime: 0,
+            error: error.message
+        };
+    }
+}
+
+// Проверяем при старте и потом каждые 30с
+checkOriginHealth();
+setInterval(checkOriginHealth, ORIGIN_CHECK_INTERVAL);
+
+app.get('/api/origin-status', (req, res) => {
+    res.json(originStatus);
 });
 
 // Главная страница

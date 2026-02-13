@@ -36,6 +36,12 @@
                     <h2>Введите позывной</h2>
                     <p>Проверьте статус всех дипломов для вашего или любого другого позывного</p>
 
+                    <!-- Баннер при недоступности hamlog.online -->
+                    <div class="origin-down-banner hidden" id="originDownBanner">
+                        <span class="origin-down-icon">⚠️</span>
+                        <span class="origin-down-text">hamlog.online недоступен — парсинг временно невозможен</span>
+                    </div>
+
                     <form class="search-form" id="searchForm">
                         <div class="input-wrapper">
                             <input type="text" id="callsignInput" placeholder="Например: R3DIV" autocomplete="off"
@@ -94,6 +100,13 @@
                             <span class="stat-label">Наград</span>
                         </div>
                     </div>
+                    <div class="stat-card stat-issued">
+                        <div class="stat-icon">📜</div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="liveStatIssued">0</span>
+                            <span class="stat-label">Выдано</span>
+                        </div>
+                    </div>
                     <div class="stat-card stat-received">
                         <div class="stat-icon">🏆</div>
                         <div class="stat-info">
@@ -115,14 +128,23 @@
                             <span class="stat-label">Не получено</span>
                         </div>
                     </div>
+                    <div class="stat-card stat-error">
+                        <div class="stat-icon">⚠️</div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="liveStatErrors">0</span>
+                            <span class="stat-label">Ошибки</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Live Filters -->
                 <div class="filters">
                     <button class="filter-btn active" data-filter="all">Все</button>
+                    <button class="filter-btn" data-filter="issued">📜 Выдано</button>
                     <button class="filter-btn" data-filter="received">🏆 Получено</button>
                     <button class="filter-btn" data-filter="in_progress">⏳ В процессе</button>
                     <button class="filter-btn" data-filter="not_received">📋 Не получено</button>
+                    <button class="filter-btn" data-filter="error">⚠️ Ошибки</button>
                 </div>
 
                 <!-- Live Results List -->
@@ -160,6 +182,13 @@
                             <span class="stat-label">Всего наград</span>
                         </div>
                     </div>
+                    <div class="stat-card stat-issued">
+                        <div class="stat-icon">📜</div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="statIssued">0</span>
+                            <span class="stat-label">Выдано</span>
+                        </div>
+                    </div>
                     <div class="stat-card stat-received">
                         <div class="stat-icon">🏆</div>
                         <div class="stat-info">
@@ -181,14 +210,23 @@
                             <span class="stat-label">Не получено</span>
                         </div>
                     </div>
+                    <div class="stat-card stat-error">
+                        <div class="stat-icon">⚠️</div>
+                        <div class="stat-info">
+                            <span class="stat-number" id="statErrors">0</span>
+                            <span class="stat-label">Ошибки</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Filters -->
                 <div class="filters" id="finalFilters">
                     <button class="filter-btn active" data-filter="all">Все</button>
+                    <button class="filter-btn" data-filter="issued">📜 Выдано</button>
                     <button class="filter-btn" data-filter="received">🏆 Получено</button>
                     <button class="filter-btn" data-filter="in_progress">⏳ В процессе</button>
                     <button class="filter-btn" data-filter="not_received">📋 Не получено</button>
+                    <button class="filter-btn" data-filter="error">⚠️ Ошибки</button>
                 </div>
 
                 <!-- Results List -->
@@ -217,6 +255,57 @@
             <p>Данные с <a href="https://hamlog.online" target="_blank">HAMLOG.online</a></p>
             <p class="copyright">© 2026 Ham Radio Diplomas Checker</p>
         </footer>
+    </div>
+
+    <!-- Changelog Modal -->
+    <div class="changelog-overlay" id="changelogOverlay">
+        <div class="changelog-modal">
+            <div class="changelog-header">
+                <span class="changelog-icon">🚀</span>
+                <h2>Что нового</h2>
+                <span class="changelog-version">v1.1.0</span>
+            </div>
+            <div class="changelog-body">
+                <ul class="changelog-list">
+                    <li>
+                        <span class="changelog-emoji">🔍</span>
+                        <div>
+                            <strong>Проверка доступности</strong>
+                            <p>Добавлена проверка работоспособности hamlog.online перед началом парсинга</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="changelog-emoji">📊</span>
+                        <div>
+                            <strong>Больше дипломов</strong>
+                            <p>Увеличено количество проверяемых дипломов</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="changelog-emoji">📜</span>
+                        <div>
+                            <strong>Категория «Выдано»</strong>
+                            <p>Новый статус для дипломов с подтверждённой выдачей</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="changelog-emoji">⚠️</span>
+                        <div>
+                            <strong>Категория «Ошибки»</strong>
+                            <p>Отдельная категория для дипломов, которые не удалось проверить</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="changelog-emoji">⚡</span>
+                        <div>
+                            <strong>3 одновременных парсера</strong>
+                            <p>Увеличено максимальное количество одновременных сессий проверки</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+            <button class="changelog-close-btn" id="changelogCloseBtn">Понятно!</button>
+        </div>
     </div>
 
     <script src="script.js"></script>

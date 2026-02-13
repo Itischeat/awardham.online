@@ -34,9 +34,11 @@ const currentCategory = document.getElementById('currentCategory');
 
 // Live Stats Elements
 const liveStatTotal = document.getElementById('liveStatTotal');
+const liveStatIssued = document.getElementById('liveStatIssued');
 const liveStatReceived = document.getElementById('liveStatReceived');
 const liveStatProgress = document.getElementById('liveStatProgress');
 const liveStatNotReceived = document.getElementById('liveStatNotReceived');
+const liveStatErrors = document.getElementById('liveStatErrors');
 
 // Live Results Elements
 const liveResultsList = document.getElementById('liveResultsList');
@@ -46,9 +48,11 @@ const liveNextPageBtn = document.getElementById('liveNextPage');
 
 // Final Stats Elements
 const statTotal = document.getElementById('statTotal');
+const statIssued = document.getElementById('statIssued');
 const statReceived = document.getElementById('statReceived');
 const statProgress = document.getElementById('statProgress');
 const statNotReceived = document.getElementById('statNotReceived');
+const statErrors = document.getElementById('statErrors');
 const completedCallsign = document.getElementById('completedCallsign');
 
 // Final Results Elements
@@ -173,6 +177,7 @@ function showProgress(callsign) {
 
     // Reset live stats
     liveStatTotal.textContent = '0';
+    liveStatIssued.textContent = '0';
     liveStatReceived.textContent = '0';
     liveStatProgress.textContent = '0';
     liveStatNotReceived.textContent = '0';
@@ -213,7 +218,7 @@ function startPolling() {
             // Get live results
             await loadLiveResults();
 
-            if (statusData.status === 'completed' || statusData.status === 'error') {
+            if (statusData.status === 'completed' || statusData.status === 'error' || statusData.status === 'cancelled') {
                 clearInterval(pollingInterval);
                 pollingInterval = null;
                 isCompleted = true;
@@ -227,6 +232,9 @@ function startPolling() {
                     setTimeout(() => {
                         showFinalResults();
                     }, 1000);
+                } else if (statusData.status === 'cancelled') {
+                    showToast('Сессия была отменена', 'warning');
+                    handleNewSearch();
                 } else {
                     showToast('Ошибка при парсинге: ' + (statusData.error || 'Неизвестная ошибка'), 'error');
                     handleNewSearch();
@@ -281,9 +289,11 @@ async function loadLiveResults() {
 
 function updateLiveStats(stats) {
     liveStatTotal.textContent = stats.total;
+    liveStatIssued.textContent = stats.issued || 0;
     liveStatReceived.textContent = stats.received;
     liveStatProgress.textContent = stats.inProgress;
     liveStatNotReceived.textContent = stats.notReceived;
+    liveStatErrors.textContent = stats.errors || 0;
 }
 
 function updateLivePagination(paginationData) {
@@ -344,9 +354,11 @@ async function loadFinalResults() {
 
 function updateFinalStats(stats) {
     animateNumber(statTotal, stats.total);
+    animateNumber(statIssued, stats.issued || 0);
     animateNumber(statReceived, stats.received);
     animateNumber(statProgress, stats.inProgress);
     animateNumber(statNotReceived, stats.notReceived);
+    animateNumber(statErrors, stats.errors || 0);
 }
 
 function updateFinalPagination(paginationData) {
@@ -416,13 +428,13 @@ function renderDiplomas(container, diplomas, isLive) {
             }
         }
 
-        // Получен = 100%
-        if (diploma.status === 'received') {
+        // Получен/Выдан = 100%
+        if (diploma.status === 'received' || diploma.status === 'issued') {
             progressPercent = 100;
         }
 
         // Определяем цвет бара
-        const barClass = diploma.status === 'received' ? 'progress-bar-success' :
+        const barClass = (diploma.status === 'received' || diploma.status === 'issued') ? 'progress-bar-success' :
             progressPercent > 50 ? 'progress-bar-warning' : 'progress-bar-default';
 
         return `
@@ -436,10 +448,10 @@ function renderDiplomas(container, diplomas, isLive) {
                     ${diploma.organization ? `<span class="diploma-organization">🏛️ ${escapeHtml(diploma.organization)}</span>` : ''}
                     ${diploma.category ? `<span class="diploma-category">📁 ${escapeHtml(diploma.category)}</span>` : ''}
                 </div>
-                ${diploma.progress || diploma.status === 'received' ? `
+                ${diploma.progress || diploma.status === 'received' || diploma.status === 'issued' ? `
                 <div class="diploma-progress-bar-container">
                     <div class="diploma-progress-bar ${barClass}" style="width: ${progressPercent}%"></div>
-                    <span class="diploma-progress-text">${progressText || (diploma.status === 'received' ? 'Выполнено!' : '')}</span>
+                    <span class="diploma-progress-text">${progressText || ((diploma.status === 'received' || diploma.status === 'issued') ? 'Выполнено!' : '')}</span>
                 </div>
                 ` : ''}
             </div>
@@ -458,6 +470,7 @@ function renderDiplomas(container, diplomas, isLive) {
 
 function getStatusIcon(status) {
     switch (status) {
+        case 'issued': return '📜';
         case 'received': return '🏆';
         case 'in_progress': return '⏳';
         case 'not_received': return '📋';
@@ -468,6 +481,7 @@ function getStatusIcon(status) {
 
 function getStatusText(status) {
     switch (status) {
+        case 'issued': return 'Выдан';
         case 'received': return 'Получен';
         case 'in_progress': return 'В процессе';
         case 'not_received': return 'Не получен';
@@ -632,10 +646,81 @@ function startStatusPolling() {
 }
 
 // ==================================================
+// Origin Health Check (hamlog.online)
+// ==================================================
+
+const originBanner = document.getElementById('originDownBanner');
+let originOnline = true;
+
+async function checkOriginStatus() {
+    try {
+        const response = await fetch('/api/origin-status');
+        const data = await response.json();
+        originOnline = data.online;
+
+        if (!originOnline) {
+            originBanner.classList.remove('hidden');
+            searchBtn.disabled = true;
+            searchBtn.querySelector('.btn-text').textContent = 'Источник недоступен';
+        } else {
+            originBanner.classList.add('hidden');
+            // Восстанавливаем кнопку только если нет активного парсинга
+            if (!currentSessionId) {
+                searchBtn.disabled = false;
+                searchBtn.querySelector('.btn-text').textContent = 'Проверить';
+            }
+        }
+    } catch (error) {
+        console.error('Origin check error:', error);
+    }
+}
+
+// ==================================================
 // Initialize
+// ==================================================
+// Changelog Popup
+// ==================================================
+
+const APP_VERSION = '1.1.0';
+
+function checkChangelog() {
+    const lastSeenVersion = localStorage.getItem('hamlog_last_version');
+    const appVersionEl = document.getElementById('appVersion');
+
+    if (appVersionEl) {
+        appVersionEl.textContent = `v${APP_VERSION}`;
+    }
+
+    if (lastSeenVersion !== APP_VERSION) {
+        const overlay = document.getElementById('changelogOverlay');
+        const closeBtn = document.getElementById('changelogCloseBtn');
+
+        if (overlay) {
+            overlay.classList.add('active');
+
+            closeBtn.addEventListener('click', () => {
+                overlay.classList.remove('active');
+                localStorage.setItem('hamlog_last_version', APP_VERSION);
+            });
+
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.classList.remove('active');
+                    localStorage.setItem('hamlog_last_version', APP_VERSION);
+                }
+            });
+        }
+    }
+}
+
+// ==================================================
+// Initialization
 // ==================================================
 
 document.addEventListener('DOMContentLoaded', () => {
     callsignInput.focus();
     startStatusPolling();
+    checkOriginStatus();
+    setInterval(checkOriginStatus, 30000);
+    checkChangelog();
 });

@@ -11,6 +11,8 @@ let currentFilter = 'all';
 let currentSort = 'progress_desc';
 let pollingInterval = null;
 let isCompleted = false;
+let parseStartTime = null;
+let avgParseTimeMs = null;
 const ITEMS_PER_PAGE = 20;
 
 // DOM Elements
@@ -192,6 +194,18 @@ function showProgress(callsign) {
     totalCount.textContent = '0';
     currentCategory.textContent = 'Подготовка...';
 
+    // Запоминаем время старта
+    parseStartTime = Date.now();
+
+    // Берём среднее время из последнего server-status
+    fetch('/api/server-status').then(r => r.json()).then(data => {
+        if (data.avgParseTime) {
+            avgParseTimeMs = data.avgParseTime;
+            const etaEl = document.getElementById('progressEta');
+            if (etaEl) etaEl.textContent = `⏱ Ожидаемое время: ~${formatDuration(avgParseTimeMs)}`;
+        }
+    }).catch(() => { });
+
     // Reset live stats
     liveStatTotal.textContent = '0';
     liveStatIssued.textContent = '0';
@@ -231,6 +245,30 @@ function startPolling() {
             }
             const statusData = await statusResponse.json();
             updateProgress(statusData);
+
+            // Обновляем оставшееся время
+            const etaEl = document.getElementById('progressEta');
+            if (etaEl && parseStartTime) {
+                const elapsed = Date.now() - parseStartTime;
+
+                if (avgParseTimeMs) {
+                    // Есть среднее из Redis — отсчитываем от него
+                    const remaining = avgParseTimeMs - elapsed;
+                    if (remaining > 0) {
+                        etaEl.textContent = `⏳ Осталось: ~${formatDuration(remaining)}`;
+                    } else {
+                        etaEl.textContent = '⏳ Вот-вот завершится...';
+                    }
+                } else if (statusData.checkedDiplomas >= 5 && statusData.totalDiplomas > 0) {
+                    // Нет данных в Redis — считаем по текущей скорости
+                    const perItem = elapsed / statusData.checkedDiplomas;
+                    const remainingItems = statusData.totalDiplomas - statusData.checkedDiplomas;
+                    const remainingMs = perItem * remainingItems;
+                    etaEl.textContent = `⏳ Осталось: ~${formatDuration(remainingMs)}`;
+                } else if (statusData.totalDiplomas > 0) {
+                    etaEl.textContent = '⏳ Оцениваем время...';
+                }
+            }
 
             // Get live results
             await loadLiveResults();
@@ -577,6 +615,12 @@ function handleNewSearch() {
     // Сброс сортировки
     currentSort = 'progress_desc';
     document.querySelectorAll('.sort-select').forEach(s => s.value = 'progress_desc');
+
+    // Сброс ETA
+    parseStartTime = null;
+    avgParseTimeMs = null;
+    const etaEl = document.getElementById('progressEta');
+    if (etaEl) etaEl.textContent = '';
 }
 
 // При закрытии вкладки — отмена парсинга
@@ -681,10 +725,34 @@ async function updateServerStatus() {
         if (data.version && appVersion) {
             appVersion.textContent = `v${data.version}`;
         }
+
+        // Обновляем информацию о времени парсинга
+        const timingEl = document.getElementById('serverTimingInfo');
+        if (timingEl) {
+            let timingParts = [];
+
+            if (data.avgParseTime) {
+                timingParts.push(`⏱ Среднее время: ~${formatDuration(data.avgParseTime)}`);
+            }
+
+            if (isBusy && data.estimatedFreeIn !== null && data.estimatedFreeIn !== undefined) {
+                timingParts.push(`🕐 Слот освободится: ~${formatDuration(data.estimatedFreeIn)}`);
+            }
+
+            timingEl.textContent = timingParts.join('  ·  ');
+        }
     } catch (error) {
         statusText.textContent = 'Нет связи';
         statusDot.className = 'status-dot';
     }
+}
+
+function formatDuration(ms) {
+    const totalSec = Math.round(ms / 1000);
+    if (totalSec < 60) return `${totalSec} сек`;
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return sec > 0 ? `${min} мин ${sec} сек` : `${min} мин`;
 }
 
 function startStatusPolling() {
@@ -770,4 +838,37 @@ document.addEventListener('DOMContentLoaded', () => {
     checkOriginStatus();
     setInterval(checkOriginStatus, 30000);
     checkChangelog();
+    initTheme();
 });
+
+// ==================================================
+// Theme Switching
+// ==================================================
+
+function initTheme() {
+    const saved = localStorage.getItem('hamlog_theme') || 'modern';
+    applyTheme(saved);
+
+    document.getElementById('themeToggle').addEventListener('click', () => {
+        const current = document.documentElement.getAttribute('data-theme');
+        const next = current === 'retro' ? 'modern' : 'retro';
+        applyTheme(next);
+        localStorage.setItem('hamlog_theme', next);
+    });
+}
+
+function applyTheme(theme) {
+    if (theme === 'retro') {
+        document.documentElement.setAttribute('data-theme', 'retro');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+}
+
+// Применяем тему до DOMContentLoaded чтобы не было мигания
+(function () {
+    const saved = localStorage.getItem('hamlog_theme');
+    if (saved === 'retro') {
+        document.documentElement.setAttribute('data-theme', 'retro');
+    }
+})();

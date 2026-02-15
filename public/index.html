@@ -12,9 +12,15 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style-retro.css">
 </head>
 
 <body>
+    <!-- Theme Toggle -->
+    <button class="theme-toggle" id="themeToggle" title="Сменить тему">
+        <span class="theme-icon-retro">📻</span>
+        <span class="theme-icon-modern">🌙</span>
+    </button>
     <div class="app">
         <!-- Header -->
         <header class="header">
@@ -61,6 +67,7 @@
                         <span class="status-dot" id="statusDot"></span>
                         <span class="status-text" id="statusText">Загрузка...</span>
                     </div>
+                    <div class="server-timing-info" id="serverTimingInfo"></div>
                 </div>
             </section>
 
@@ -76,6 +83,8 @@
                         <div class="progress-bar" id="progressBar"></div>
                         <span class="progress-text" id="progressText">0%</span>
                     </div>
+
+                    <div class="progress-eta" id="progressEta"></div>
 
                     <div class="progress-details">
                         <div class="progress-stat">
@@ -291,6 +300,20 @@
                         <div>
                             <strong>Сортировка наград</strong>
                             <p>Выбор сортировки: по статусу, по прогрессу или по названию</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="changelog-emoji">🎨</span>
+                        <div>
+                            <strong>Тема «Мастерская»</strong>
+                            <p>Ретро-тема в стиле шека радиолюбителя — кнопка 📻 в правом нижнем углу</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="changelog-emoji">⏱</span>
+                        <div>
+                            <strong>Время парсинга</strong>
+                            <p>Среднее время и обратный отсчёт при парсинге</p>
                         </div>
                     </li>
                 </ul>

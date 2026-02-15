@@ -406,6 +406,24 @@ body {
     }
 }
 
+/* Server Timing Info */
+.server-timing-info {
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+    min-height: 1.2em;
+}
+
+/* Progress ETA */
+.progress-eta {
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 0.75rem;
+    min-height: 1.2em;
+}
+
 /* ============================================
    Progress Section
    ============================================ */

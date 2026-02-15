@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { parseAllDiplomas } = require('./parser/index');
-const { clearCache, getCacheInfo } = require('./parser/cache');
+const { clearCache, getCacheInfo, connectRedis } = require('./parser/cache');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,6 +19,10 @@ const parsingSessions = new Map();
 // Лимит одновременных парсингов (каждый запускает Chromium ~300-500 МБ RAM)
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT) || 2;
 let activeParsings = 0;
+
+// Redis key для хранения длительностей парсинга
+const PARSE_DURATIONS_KEY = 'hamlog:parse_durations';
+const MAX_STORED_DURATIONS = 50;
 
 // Heartbeat: если клиент не шлёт пинг 90 секунд — сессия считается брошенной
 const HEARTBEAT_TIMEOUT = 90 * 1000;
@@ -242,10 +246,76 @@ async function runParsing(sessionId, callsign) {
         activeParsings--;
         console.log(`🔄 Активных парсингов: ${activeParsings}/${MAX_CONCURRENT}`);
 
+        // Записываем длительность в Redis (только успешные парсинги)
+        if (session.status === 'completed') {
+            const duration = Date.now() - session.startTime;
+            recordParseDuration(duration).catch(err =>
+                console.error('⏱ Ошибка записи длительности:', err.message)
+            );
+        }
+
         // Очищаем сессию через 10 минут
         setTimeout(() => {
             parsingSessions.delete(sessionId);
         }, 10 * 60 * 1000);
+    }
+}
+
+// Записать длительность парсинга в Redis
+async function recordParseDuration(durationMs) {
+    try {
+        const redis = await connectRedis();
+        if (!redis) return;
+
+        await redis.lPush(PARSE_DURATIONS_KEY, durationMs.toString());
+        await redis.lTrim(PARSE_DURATIONS_KEY, 0, MAX_STORED_DURATIONS - 1);
+
+        const avgMs = Math.round(durationMs / 1000);
+        console.log(`⏱ Парсинг занял ${avgMs}с, записано в Redis`);
+    } catch (error) {
+        console.error('⏱ Ошибка Redis (длительность):', error.message);
+    }
+}
+
+// Получить статистику по времени парсинга
+async function getTimingStats() {
+    try {
+        const redis = await connectRedis();
+        if (!redis) return { avgParseTime: null, estimatedFreeIn: null };
+
+        const durations = await redis.lRange(PARSE_DURATIONS_KEY, 0, -1);
+
+        if (!durations || durations.length === 0) {
+            return { avgParseTime: null, estimatedFreeIn: null };
+        }
+
+        const nums = durations.map(Number);
+        const avgMs = Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
+
+        // Оценка времени до освобождения слота
+        let estimatedFreeIn = null;
+        if (activeParsings >= MAX_CONCURRENT) {
+            const now = Date.now();
+            let minRemaining = Infinity;
+
+            for (const session of parsingSessions.values()) {
+                if (session.status === 'parsing' || session.status === 'started') {
+                    const elapsed = now - session.startTime;
+                    const remaining = avgMs - elapsed;
+                    if (remaining < minRemaining) {
+                        minRemaining = remaining;
+                    }
+                }
+            }
+
+            // Минимум 0, не показываем отрицательное
+            estimatedFreeIn = Math.max(0, minRemaining === Infinity ? 0 : minRemaining);
+        }
+
+        return { avgParseTime: avgMs, estimatedFreeIn, totalSamples: durations.length };
+    } catch (error) {
+        console.error('⏱ Ошибка чтения статистики:', error.message);
+        return { avgParseTime: null, estimatedFreeIn: null };
     }
 }
 
@@ -262,7 +332,7 @@ setInterval(() => {
 }, 15 * 1000);
 
 // API: Статус сервера (активные парсинги)
-app.get('/api/server-status', (req, res) => {
+app.get('/api/server-status', async (req, res) => {
     // Пересчитываем из реальных данных — страховка от рассинхрона счётчика
     let realActive = 0;
     for (const session of parsingSessions.values()) {
@@ -276,11 +346,15 @@ app.get('/api/server-status', (req, res) => {
         activeParsings = realActive;
     }
 
+    // Получаем статистику по времени парсинга
+    const timingStats = await getTimingStats();
+
     res.json({
         activeParsings,
         maxConcurrent: MAX_CONCURRENT,
         isBusy: activeParsings >= MAX_CONCURRENT,
-        version: APP_VERSION
+        version: APP_VERSION,
+        ...timingStats
     });
 });
 

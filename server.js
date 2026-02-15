@@ -119,7 +119,7 @@ app.post('/api/cancel/:sessionId', (req, res) => {
 // API: Получить результаты с пагинацией
 app.get('/api/results/:sessionId', (req, res) => {
     const { sessionId } = req.params;
-    const { page = 1, limit = 20, filter = 'all' } = req.query;
+    const { page = 1, limit = 20, filter = 'all', sort = 'progress_desc' } = req.query;
 
     const session = parsingSessions.get(sessionId);
 
@@ -134,9 +134,44 @@ app.get('/api/results/:sessionId', (req, res) => {
         results = results.filter(r => r.status === filter);
     }
 
-    // Сортировка: полученные сверху, потом в процессе, потом не получены
+    // Вычисляем процент прогресса для сортировки
+    const getProgressPercent = (r) => {
+        if (!r.progress) return 0;
+        const match = r.progress.match(/(\d+)\/(\d+)/);
+        if (match) {
+            const current = parseInt(match[1]);
+            const total = parseInt(match[2]);
+            return total > 0 ? (current / total) * 100 : 0;
+        }
+        return 0;
+    };
+
+    // Сортировка
     const statusOrder = { 'issued': 0, 'received': 1, 'in_progress': 2, 'not_received': 3, 'error': 4 };
-    results.sort((a, b) => (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99));
+
+    switch (sort) {
+        case 'progress_desc':
+            // По прогрессу убывание (почти готовые сверху)
+            results.sort((a, b) => getProgressPercent(b) - getProgressPercent(a));
+            break;
+        case 'progress_asc':
+            // По прогрессу возрастание (начинающие сверху)
+            results.sort((a, b) => getProgressPercent(a) - getProgressPercent(b));
+            break;
+        case 'name':
+            // По имени (А-Я)
+            results.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru'));
+            break;
+        case 'status':
+        default:
+            // По статусу + прогресс внутри группы
+            results.sort((a, b) => {
+                const statusDiff = (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99);
+                if (statusDiff !== 0) return statusDiff;
+                return getProgressPercent(b) - getProgressPercent(a);
+            });
+            break;
+    }
 
     // Пагинация
     const pageNum = parseInt(page);

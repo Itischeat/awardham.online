@@ -8,6 +8,7 @@ let currentCallsign = null;
 let currentPage = 1;
 let livePage = 1;
 let currentFilter = 'all';
+let currentSort = 'progress_desc';
 let pollingInterval = null;
 let isCompleted = false;
 const ITEMS_PER_PAGE = 20;
@@ -90,6 +91,22 @@ document.querySelectorAll('#finalFilters .filter-btn').forEach(btn => {
         currentFilter = btn.dataset.filter;
         currentPage = 1;
         loadFinalResults();
+    });
+});
+
+// Sort dropdowns
+document.querySelectorAll('.sort-select').forEach(select => {
+    select.addEventListener('change', (e) => {
+        currentSort = e.target.value;
+        // Синхронизируем все селекты сортировки
+        document.querySelectorAll('.sort-select').forEach(s => s.value = currentSort);
+        currentPage = 1;
+        livePage = 1;
+        if (isCompleted) {
+            loadFinalResults();
+        } else {
+            loadLiveResults();
+        }
     });
 });
 
@@ -264,7 +281,7 @@ function updateProgress(data) {
 async function loadLiveResults() {
     try {
         const response = await fetch(
-            `/api/results/${currentSessionId}?page=${livePage}&limit=${ITEMS_PER_PAGE}&filter=${currentFilter}`
+            `/api/results/${currentSessionId}?page=${livePage}&limit=${ITEMS_PER_PAGE}&filter=${currentFilter}&sort=${currentSort}`
         );
 
         if (!response.ok) {
@@ -322,13 +339,16 @@ function showFinalResults() {
         btn.classList.toggle('active', btn.dataset.filter === 'all');
     });
 
+    // Синхронизируем сортировку с выбранным значением
+    document.querySelectorAll('.sort-select').forEach(s => s.value = currentSort);
+
     loadFinalResults();
 }
 
 async function loadFinalResults() {
     try {
         const response = await fetch(
-            `/api/results/${currentSessionId}?page=${currentPage}&limit=${ITEMS_PER_PAGE}&filter=${currentFilter}`
+            `/api/results/${currentSessionId}?page=${currentPage}&limit=${ITEMS_PER_PAGE}&filter=${currentFilter}&sort=${currentSort}`
         );
 
         if (!response.ok) {
@@ -433,9 +453,21 @@ function renderDiplomas(container, diplomas, isLive) {
             progressPercent = 100;
         }
 
-        // Определяем цвет бара
+        // Определяем цвет бара и кольца
         const barClass = (diploma.status === 'received' || diploma.status === 'issued') ? 'progress-bar-success' :
-            progressPercent > 50 ? 'progress-bar-warning' : 'progress-bar-default';
+            progressPercent >= 75 ? 'progress-bar-almost' :
+                progressPercent > 50 ? 'progress-bar-warning' : 'progress-bar-default';
+
+        // Цвет для SVG кольца
+        const ringColor = (diploma.status === 'received' || diploma.status === 'issued') ? '#10b981' :
+            progressPercent >= 75 ? '#22c55e' :
+                progressPercent > 50 ? '#f59e0b' : '#6366f1';
+
+        // SVG круговой индикатор (обводка кольца)
+        const circumference = 2 * Math.PI * 18; // r=18
+        const strokeDashoffset = circumference - (progressPercent / 100) * circumference;
+
+        const showProgressRing = diploma.status === 'in_progress' && diploma.progress;
 
         return `
         <div class="diploma-card ${diploma.status}" onclick="window.open('${diploma.url}', '_blank')">
@@ -455,11 +487,22 @@ function renderDiplomas(container, diplomas, isLive) {
                 </div>
                 ` : ''}
             </div>
+            ${showProgressRing ? `
+            <div class="diploma-percent-ring" title="${progressPercent}%">
+                <svg viewBox="0 0 44 44">
+                    <circle class="ring-bg" cx="22" cy="22" r="18"/>
+                    <circle class="ring-fill" cx="22" cy="22" r="18"
+                        stroke="${ringColor}"
+                        stroke-dasharray="${circumference}"
+                        stroke-dashoffset="${strokeDashoffset}"/>
+                </svg>
+                <span class="ring-text">${progressPercent}%</span>
+            </div>
+            ` : ''}
             <div class="diploma-status-wrapper">
                 <div class="diploma-status">
                     ${getStatusText(diploma.status)}
                 </div>
-                ${diploma.progress ? `<div class="diploma-progress-badge">${escapeHtml(diploma.progress)}</div>` : ''}
             </div>
             <a class="diploma-link" href="${diploma.url}" target="_blank" onclick="event.stopPropagation();" title="Открыть на HAMLOG">
                 🔗
@@ -530,6 +573,10 @@ function handleNewSearch() {
     searchBtn.querySelector('.btn-text').textContent = 'Проверить';
     callsignInput.value = '';
     callsignInput.focus();
+
+    // Сброс сортировки
+    currentSort = 'progress_desc';
+    document.querySelectorAll('.sort-select').forEach(s => s.value = 'progress_desc');
 }
 
 // При закрытии вкладки — отмена парсинга
@@ -681,7 +728,7 @@ async function checkOriginStatus() {
 // Changelog Popup
 // ==================================================
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 
 function checkChangelog() {
     const lastSeenVersion = localStorage.getItem('hamlog_last_version');

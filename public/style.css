@@ -720,11 +720,19 @@ body {
 }
 
 /* Filters */
+.filters-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
 .filters {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
-    margin-bottom: 1.5rem;
+    flex: 1;
 }
 
 .filter-btn {
@@ -748,6 +756,45 @@ body {
     background: var(--accent-gradient);
     border-color: transparent;
     color: white;
+}
+
+/* Sort Dropdown */
+.sort-wrapper {
+    flex-shrink: 0;
+}
+
+.sort-select {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    padding: 0.625rem 2rem 0.625rem 0.875rem;
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239ca3af' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    font-family: inherit;
+}
+
+.sort-select:hover {
+    background-color: var(--bg-card-hover);
+    color: var(--text-primary);
+}
+
+.sort-select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.sort-select option {
+    background: var(--bg-card);
+    color: var(--text-secondary);
 }
 
 /* Results List */
@@ -835,41 +882,85 @@ body {
 /* Diploma Progress Bar */
 .diploma-progress-bar-container {
     position: relative;
-    height: 8px;
+    height: 20px;
     background: var(--bg-secondary);
-    border-radius: 4px;
+    border-radius: 10px;
     margin-top: 0.5rem;
     overflow: hidden;
 }
 
 .diploma-progress-bar {
     height: 100%;
-    border-radius: 4px;
+    border-radius: 10px;
     transition: width 0.5s ease;
     background: linear-gradient(90deg, #6366f1, #8b5cf6);
 }
 
 .diploma-progress-bar.progress-bar-success {
-    background: linear-gradient(90deg, #10b981, #34d399);
+    background: linear-gradient(90deg, #0d9668, #2ab583);
 }
 
 .diploma-progress-bar.progress-bar-warning {
-    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+    background: linear-gradient(90deg, #c7850a, #d9a535);
+}
+
+.diploma-progress-bar.progress-bar-almost {
+    background: linear-gradient(90deg, #1a9e4a, #6aaa12);
 }
 
 .diploma-progress-bar.progress-bar-default {
-    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    background: linear-gradient(90deg, #4f52c9, #7350c9);
 }
 
 .diploma-progress-text {
     position: absolute;
-    right: 4px;
+    left: 0;
+    right: 0;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     font-weight: 600;
     color: white;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    text-align: center;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+}
+
+/* Circular Percentage Ring */
+.diploma-percent-ring {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+}
+
+.diploma-percent-ring svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.diploma-percent-ring .ring-bg {
+    fill: none;
+    stroke: var(--bg-secondary);
+    stroke-width: 3;
+}
+
+.diploma-percent-ring .ring-fill {
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.6s ease;
+}
+
+.diploma-percent-ring .ring-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--text-primary);
 }
 
 .diploma-status {
@@ -1094,6 +1185,14 @@ body {
 
     .stats-grid {
         grid-template-columns: repeat(3, 1fr);
+    }
+
+    .filters-row {
+        flex-direction: column;
+    }
+
+    .sort-select {
+        width: 100%;
     }
 
     .diploma-card {

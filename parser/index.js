@@ -506,15 +506,23 @@ async function parseResults(page, diploma, callsign) {
             const text = card.innerText || '';
             const classes = card.className || '';
 
+            // Убираем текст навигационных ссылок для точного определения статуса
+            const cleanText = text
+                .replace(/Issued Awards? List/gi, '')
+                .replace(/Список выданных(?:\s+дипломов|\s+наград)?/gi, '')
+                .replace(/Award Criteria/gi, '')
+                .replace(/Условия диплома/gi, '');
+
             // Упрощённая проверка: ищем "из" или "out of" или "enough" в тексте
-            const hasProgress = text.includes(' из ') || text.includes('out of');
-            const hasIssued = text.includes('выдан') || text.includes('issued') || text.includes('awarded');
-            const hasNotEnough = text.includes('недостаточно') || text.includes('enough');
+            const hasProgress = cleanText.includes(' из ') || cleanText.includes('out of');
+            const hasIssued = /(?<![а-яё])выдан(?!н)/i.test(cleanText) || /\bissued\b|\bawarded\b/i.test(cleanText);
+            const hasNotEnough = cleanText.includes('недостаточно') || cleanText.includes('enough');
+            const hasCompleted = /Успешно|Successfully|выполнен|accomplished/i.test(cleanText);
 
-            // Карточка должна содержать результат
-            const isResultCard = (hasProgress || hasIssued || hasNotEnough);
+            // Карточка должна содержать результат (прогресс, статус выдачи, или "недостаточно")
+            const isResultCard = (hasProgress || hasIssued || hasNotEnough || hasCompleted);
 
-            debug.push(`Card check: progress=${hasProgress}, issued=${hasIssued}, notEnough=${hasNotEnough}, result=${isResultCard}`);
+            debug.push(`Card check: progress=${hasProgress}, issued=${hasIssued}, notEnough=${hasNotEnough}, completed=${hasCompleted}, result=${isResultCard}, text="${cleanText.substring(0, 80).replace(/\n/g, ' ')}"`);
 
             if (!isResultCard) continue;
 
@@ -549,16 +557,21 @@ async function parseResults(page, diploma, callsign) {
             // Materialize CSS цвета: green, teal = успех; red = неудача
             const isGreen = classes.includes('green') || classes.includes('teal') || classes.includes('cyan');
             const isRed = classes.includes('red') || classes.includes('orange') || classes.includes('amber');
-            const hasIssuedText = /выдан|issued|awarded/i.test(text);
-            const hasCompletedText = /Успешно выполнен/i.test(text);
+            const hasIssuedText = /(?<![а-яё])выдан(?!н)/i.test(cleanText) || /\bissued\b|\bawarded\b/i.test(cleanText);
+            const hasCompletedText = /Успешно выполнен|Successfully accomplished/i.test(cleanText);
             const hasNotEnoughStatus = /недостаточно|enough points|not enough/i.test(text);
 
-            if (hasIssuedText) {
-                // Текст "выдан" / "issued" = выдано
+            if (isGreen || hasCompletedText) {
+                // Зелёная/бирюзовая карточка или "Успешно выполнен" = получено
+                if (hasIssuedText) {
+                    // Если при этом есть точное слово "выдан" — значит уже выдан
+                    cardStatus = 'issued';
+                } else {
+                    cardStatus = 'received';
+                }
+            } else if (hasIssuedText) {
+                // Текст "выдан" / "issued" без зелёного = выдано
                 cardStatus = 'issued';
-            } else if (isGreen || hasCompletedText) {
-                // Зелёная/бирюзовая карточка без текста "выдан" = получено
-                cardStatus = 'received';
             } else if (isRed || hasNotEnoughStatus) {
                 // Красная карточка = проверяем прогресс
                 if (current === 0) {
@@ -676,7 +689,7 @@ async function parseResults(page, diploma, callsign) {
             } else {
                 status = 'in_progress';
             }
-        } else if (/выдан|issued|awarded|диплом.*выдан|certificate.*issued/i.test(text)) {
+        } else if (/(?<![а-яё])выдан(?!н)|диплом.*выдан(?!н)/i.test(text) || /\bissued\b|\bawarded\b/i.test(text)) {
             status = 'issued';
         } else if (/получен|congratulations|поздравляем/i.test(text)) {
             status = 'received';

@@ -8,6 +8,7 @@
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
+[![Demo](https://img.shields.io/badge/Demo-awardham.online-blueviolet?logo=googlechrome&logoColor=white)](https://awardham.online)
 
 ---
 
@@ -35,6 +36,8 @@
   <em>Введите позывной → Система проверяет сотни дипломов → Получите детальный отчёт</em>
 </p>
 
+> 🌐 **Живая версия:** приложение развёрнуто и доступно по адресу **[awardham.online](https://awardham.online)**
+
 ---
 
 ## ✨ Возможности
@@ -47,8 +50,11 @@
 | 🔄 **Кэширование (Redis)** | Каталог дипломов кэшируется на 12 часов, что исключает повторное 5–10 минутное сканирование |
 | 📊 **Real-time прогресс** | Live-обновление статуса: активные воркеры, текущая категория, процент завершения |
 | 🌙 **Premium тёмная тема** | Glassmorphism UI с анимированными прогресс-барами и radar-стилем загрузки |
-| 🐳 **Docker** | Полностью контейнеризированный деплой одной командой |
+| 🐳 **Docker** | Полностью контейнеризированный деплой одной командой (dev и production конфигурации) |
 | 🛡️ **Устойчивость к ошибкам** | Retry-логика (3 попытки), обработка таймаутов и race conditions |
+| 💓 **Heartbeat & отмена** | Автоматическое обнаружение брошенных сессий и возможность отмены парсинга клиентом |
+| 📈 **Статистика сервера** | Мониторинг активных парсингов, среднее время выполнения, оценка ожидания слота |
+| 🌐 **Health Check** | Автоматическая проверка доступности hamlog.online каждые 30 секунд |
 
 ---
 
@@ -60,8 +66,8 @@
 | **Скрапинг** | Puppeteer (Headless Chromium) |
 | **Кэш** | Redis 7 |
 | **Frontend** | HTML, Vanilla CSS, Vanilla JavaScript |
-| **Инфраструктура** | Docker, Docker Compose |
-| **Коммуникация** | Polling API с сессионным управлением |
+| **Инфраструктура** | Docker, Docker Compose, Nginx (production) |
+| **Коммуникация** | Polling API с сессионным управлением и heartbeat |
 
 ---
 
@@ -87,6 +93,14 @@ docker compose up -d
 
 ```bash
 docker compose down
+```
+
+#### Production-деплой
+
+Для продакшена используйте отдельный конфиг с Nginx:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 > **💡 Примечание:** Данные Redis сохраняются в Docker volume `redis-data`, поэтому кэш дипломов переживает рестарт контейнеров.
@@ -135,6 +149,7 @@ npm start
 |---|---|---|
 | `PORT` | `3000` | Порт веб-сервера |
 | `REDIS_URL` | — | URL Redis сервера. Для локальной разработки: `redis://localhost:6379`. В Docker Compose устанавливается автоматически |
+| `MAX_CONCURRENT` | `2` | Максимальное количество одновременных парсингов. Каждый парсинг запускает Chromium (~300–500 МБ RAM) |
 
 ---
 
@@ -148,13 +163,18 @@ ForFather/
 │   ├── workerPool.js      # Пул параллельных Puppeteer-воркеров (5 табов)
 │   ├── clubAwards.js      # Парсинг клубных и региональных наград
 │   ├── territoryAwards.js # Парсинг территориальных наград
+│   ├── globalAwards.js    # Парсинг глобальных наград
 │   └── cache.js           # Redis кэширование каталога дипломов
 ├── public/
 │   ├── index.html         # Главная страница приложения
-│   ├── style.css          # Стили (glassmorphism, dark theme, анимации)
+│   ├── style.css          # Основные стили (glassmorphism, dark theme, анимации)
+│   ├── style-retro.css    # Альтернативная ретро-тема
 │   └── script.js          # Клиентская логика (polling, rendering)
+├── nginx/
+│   └── nginx.conf         # Конфигурация Nginx для production
 ├── Dockerfile             # Образ на базе node:22-slim + Chromium
-├── docker-compose.yml     # Оркестрация app + Redis
+├── docker-compose.yml     # Оркестрация app + Redis (dev)
+├── docker-compose.prod.yml# Оркестрация app + Redis + Nginx (production)
 ├── .env.example           # Шаблон переменных окружения
 ├── package.json           # Зависимости и скрипты
 └── .dockerignore          # Исключения для Docker-сборки
@@ -175,7 +195,7 @@ Content-Type: application/json
 }
 ```
 
-**Ответ:**
+**Ответ (200):**
 
 ```json
 {
@@ -183,6 +203,18 @@ Content-Type: application/json
   "message": "Начинаем проверку позывного R1ABC"
 }
 ```
+
+**Ответ (429 — сервер занят):**
+
+```json
+{
+  "error": "Сервер занят. Сейчас выполняется 2 парсинг(ов). Попробуйте через несколько минут.",
+  "activeParsings": 2,
+  "maxConcurrent": 2
+}
+```
+
+---
 
 ### Получить статус парсинга
 
@@ -199,21 +231,110 @@ GET /api/status/:sessionId
   "progress": 42,
   "totalDiplomas": 350,
   "checkedDiplomas": 147,
-  "currentCategory": "Клубные награды"
+  "currentCategory": "Клубные награды",
+  "results": [],
+  "error": null,
+  "startTime": 1707500000000
 }
 ```
+
+---
+
+### Heartbeat
+
+Клиент подтверждает, что ещё на странице. Если heartbeat не приходит 90 секунд — сессия считается брошенной и парсинг отменяется.
+
+```http
+POST /api/heartbeat/:sessionId
+```
+
+---
+
+### Отменить парсинг
+
+```http
+POST /api/cancel/:sessionId
+```
+
+---
 
 ### Получить результаты
 
 ```http
-GET /api/results/:sessionId?page=1&limit=20&filter=all
+GET /api/results/:sessionId?page=1&limit=20&filter=all&sort=progress_desc
 ```
 
 | Параметр | Описание | Значения |
 |---|---|---|
 | `page` | Номер страницы | `1`, `2`, ... |
 | `limit` | Количество на странице | по умолчанию `20` |
-| `filter` | Фильтр по статусу | `all`, `received`, `in_progress`, `not_received` |
+| `filter` | Фильтр по статусу | `all`, `issued`, `received`, `in_progress`, `not_received`, `error` |
+| `sort` | Сортировка | `progress_desc` (по умолчанию), `progress_asc`, `name`, `status` |
+
+**Ответ:**
+
+```json
+{
+  "results": [...],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "totalItems": 350,
+    "totalPages": 18
+  },
+  "stats": {
+    "total": 350,
+    "issued": 5,
+    "received": 12,
+    "inProgress": 45,
+    "notReceived": 280,
+    "errors": 8
+  },
+  "isCompleted": false
+}
+```
+
+---
+
+### Статус сервера
+
+```http
+GET /api/server-status
+```
+
+**Ответ:**
+
+```json
+{
+  "activeParsings": 1,
+  "maxConcurrent": 2,
+  "isBusy": false,
+  "version": "1.2.0",
+  "avgParseTime": 180000,
+  "estimatedFreeIn": null,
+  "totalSamples": 15
+}
+```
+
+---
+
+### Статус hamlog.online
+
+```http
+GET /api/origin-status
+```
+
+**Ответ:**
+
+```json
+{
+  "online": true,
+  "lastCheck": 1707500030000,
+  "responseTime": 245
+}
+```
+
+---
 
 ### Управление кэшем
 
@@ -272,9 +393,11 @@ GET  /api/cache/info      # Информация о состоянии кэша
 
 | Статус | Значение |
 |---|---|
-| 🟢 `received` | Диплом получен / награда выдана |
+| 🟢 `issued` | Диплом выдан |
+| 🟢 `received` | Награда получена |
 | 🟡 `in_progress` | Есть прогресс, но ещё не получен |
 | 🔴 `not_received` | Прогресс отсутствует |
+| ⚠️ `error` | Ошибка при парсинге страницы диплома |
 
 ---
 

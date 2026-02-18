@@ -1,6 +1,6 @@
 {
     "name": "hamlog-diplomas-parser",
-    "version": "1.1.2",
+    "version": "1.2.0",
     "description": "Парсер дипломов радиолюбителей с hamlog.online",
     "main": "server.js",
     "scripts": {

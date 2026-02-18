@@ -12,9 +12,15 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style-retro.css">
 </head>
 
 <body>
+    <!-- Theme Toggle -->
+    <button class="theme-toggle" id="themeToggle" title="Сменить тему">
+        <span class="theme-icon-retro">📻</span>
+        <span class="theme-icon-modern">🌙</span>
+    </button>
     <div class="app">
         <!-- Header -->
         <header class="header">
@@ -61,6 +67,7 @@
                         <span class="status-dot" id="statusDot"></span>
                         <span class="status-text" id="statusText">Загрузка...</span>
                     </div>
+                    <div class="server-timing-info" id="serverTimingInfo"></div>
                 </div>
             </section>
 
@@ -76,6 +83,8 @@
                         <div class="progress-bar" id="progressBar"></div>
                         <span class="progress-text" id="progressText">0%</span>
                     </div>
+
+                    <div class="progress-eta" id="progressEta"></div>
 
                     <div class="progress-details">
                         <div class="progress-stat">
@@ -138,13 +147,22 @@
                 </div>
 
                 <!-- Live Filters -->
-                <div class="filters">
-                    <button class="filter-btn active" data-filter="all">Все</button>
-                    <button class="filter-btn" data-filter="issued">📜 Выдано</button>
-                    <button class="filter-btn" data-filter="received">🏆 Получено</button>
-                    <button class="filter-btn" data-filter="in_progress">⏳ В процессе</button>
-                    <button class="filter-btn" data-filter="not_received">📋 Не получено</button>
-                    <button class="filter-btn" data-filter="error">⚠️ Ошибки</button>
+                <div class="filters-row">
+                    <div class="filters">
+                        <button class="filter-btn active" data-filter="all">Все</button>
+                        <button class="filter-btn" data-filter="issued">📜 Выдано</button>
+                        <button class="filter-btn" data-filter="received">🏆 Получено</button>
+                        <button class="filter-btn" data-filter="in_progress">⏳ В процессе</button>
+                        <button class="filter-btn" data-filter="not_received">📋 Не получено</button>
+                        <button class="filter-btn" data-filter="error">⚠️ Ошибки</button>
+                    </div>
+                    <div class="sort-wrapper">
+                        <select class="sort-select" title="Сортировка">
+                            <option value="progress_desc">📈 По прогрессу ↓</option>
+                            <option value="progress_asc">📉 По прогрессу ↑</option>
+                            <option value="name">🔤 По названию</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- Live Results List -->
@@ -220,13 +238,23 @@
                 </div>
 
                 <!-- Filters -->
-                <div class="filters" id="finalFilters">
-                    <button class="filter-btn active" data-filter="all">Все</button>
-                    <button class="filter-btn" data-filter="issued">📜 Выдано</button>
-                    <button class="filter-btn" data-filter="received">🏆 Получено</button>
-                    <button class="filter-btn" data-filter="in_progress">⏳ В процессе</button>
-                    <button class="filter-btn" data-filter="not_received">📋 Не получено</button>
-                    <button class="filter-btn" data-filter="error">⚠️ Ошибки</button>
+                <div class="filters-row">
+                    <div class="filters" id="finalFilters">
+                        <button class="filter-btn active" data-filter="all">Все</button>
+                        <button class="filter-btn" data-filter="issued">📜 Выдано</button>
+                        <button class="filter-btn" data-filter="received">🏆 Получено</button>
+                        <button class="filter-btn" data-filter="in_progress">⏳ В процессе</button>
+                        <button class="filter-btn" data-filter="not_received">📋 Не получено</button>
+                        <button class="filter-btn" data-filter="error">⚠️ Ошибки</button>
+                    </div>
+                    <div class="sort-wrapper">
+                        <select class="sort-select" title="Сортировка">
+                            <option value="status">📊 По статусу</option>
+                            <option value="progress_desc">📈 По прогрессу ↓</option>
+                            <option value="progress_asc">📉 По прогрессу ↑</option>
+                            <option value="name">🔤 По названию</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- Results List -->
@@ -263,43 +291,29 @@
             <div class="changelog-header">
                 <span class="changelog-icon">🚀</span>
                 <h2>Что нового</h2>
-                <span class="changelog-version">v1.1.0</span>
+                <span class="changelog-version">v1.2.0</span>
             </div>
             <div class="changelog-body">
                 <ul class="changelog-list">
                     <li>
-                        <span class="changelog-emoji">🔍</span>
+                        <span class="changelog-emoji">🔀</span>
                         <div>
-                            <strong>Проверка доступности</strong>
-                            <p>Добавлена проверка работоспособности hamlog.online перед началом парсинга</p>
+                            <strong>Сортировка наград</strong>
+                            <p>Выбор сортировки: по статусу, по прогрессу или по названию</p>
                         </div>
                     </li>
                     <li>
-                        <span class="changelog-emoji">📊</span>
+                        <span class="changelog-emoji">🎨</span>
                         <div>
-                            <strong>Больше дипломов</strong>
-                            <p>Увеличено количество проверяемых дипломов</p>
+                            <strong>Тема «Мастерская»</strong>
+                            <p>Ретро-тема в стиле шека радиолюбителя — кнопка 📻 в правом нижнем углу</p>
                         </div>
                     </li>
                     <li>
-                        <span class="changelog-emoji">📜</span>
+                        <span class="changelog-emoji">⏱</span>
                         <div>
-                            <strong>Категория «Выдано»</strong>
-                            <p>Новый статус для дипломов с подтверждённой выдачей</p>
-                        </div>
-                    </li>
-                    <li>
-                        <span class="changelog-emoji">⚠️</span>
-                        <div>
-                            <strong>Категория «Ошибки»</strong>
-                            <p>Отдельная категория для дипломов, которые не удалось проверить</p>
-                        </div>
-                    </li>
-                    <li>
-                        <span class="changelog-emoji">⚡</span>
-                        <div>
-                            <strong>3 одновременных парсера</strong>
-                            <p>Увеличено максимальное количество одновременных сессий проверки</p>
+                            <strong>Время парсинга</strong>
+                            <p>Среднее время и обратный отсчёт при парсинге</p>
                         </div>
                     </li>
                 </ul>

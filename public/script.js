@@ -8,8 +8,11 @@ let currentCallsign = null;
 let currentPage = 1;
 let livePage = 1;
 let currentFilter = 'all';
+let currentSort = 'progress_desc';
 let pollingInterval = null;
 let isCompleted = false;
+let parseStartTime = null;
+let avgParseTimeMs = null;
 const ITEMS_PER_PAGE = 20;
 
 // DOM Elements
@@ -90,6 +93,22 @@ document.querySelectorAll('#finalFilters .filter-btn').forEach(btn => {
         currentFilter = btn.dataset.filter;
         currentPage = 1;
         loadFinalResults();
+    });
+});
+
+// Sort dropdowns
+document.querySelectorAll('.sort-select').forEach(select => {
+    select.addEventListener('change', (e) => {
+        currentSort = e.target.value;
+        // Синхронизируем все селекты сортировки
+        document.querySelectorAll('.sort-select').forEach(s => s.value = currentSort);
+        currentPage = 1;
+        livePage = 1;
+        if (isCompleted) {
+            loadFinalResults();
+        } else {
+            loadLiveResults();
+        }
     });
 });
 
@@ -175,6 +194,18 @@ function showProgress(callsign) {
     totalCount.textContent = '0';
     currentCategory.textContent = 'Подготовка...';
 
+    // Запоминаем время старта
+    parseStartTime = Date.now();
+
+    // Берём среднее время из последнего server-status
+    fetch('/api/server-status').then(r => r.json()).then(data => {
+        if (data.avgParseTime) {
+            avgParseTimeMs = data.avgParseTime;
+            const etaEl = document.getElementById('progressEta');
+            if (etaEl) etaEl.textContent = `⏱ Ожидаемое время: ~${formatDuration(avgParseTimeMs)}`;
+        }
+    }).catch(() => { });
+
     // Reset live stats
     liveStatTotal.textContent = '0';
     liveStatIssued.textContent = '0';
@@ -214,6 +245,30 @@ function startPolling() {
             }
             const statusData = await statusResponse.json();
             updateProgress(statusData);
+
+            // Обновляем оставшееся время
+            const etaEl = document.getElementById('progressEta');
+            if (etaEl && parseStartTime) {
+                const elapsed = Date.now() - parseStartTime;
+
+                if (avgParseTimeMs) {
+                    // Есть среднее из Redis — отсчитываем от него
+                    const remaining = avgParseTimeMs - elapsed;
+                    if (remaining > 0) {
+                        etaEl.textContent = `⏳ Осталось: ~${formatDuration(remaining)}`;
+                    } else {
+                        etaEl.textContent = '⏳ Вот-вот завершится...';
+                    }
+                } else if (statusData.checkedDiplomas >= 5 && statusData.totalDiplomas > 0) {
+                    // Нет данных в Redis — считаем по текущей скорости
+                    const perItem = elapsed / statusData.checkedDiplomas;
+                    const remainingItems = statusData.totalDiplomas - statusData.checkedDiplomas;
+                    const remainingMs = perItem * remainingItems;
+                    etaEl.textContent = `⏳ Осталось: ~${formatDuration(remainingMs)}`;
+                } else if (statusData.totalDiplomas > 0) {
+                    etaEl.textContent = '⏳ Оцениваем время...';
+                }
+            }
 
             // Get live results
             await loadLiveResults();
@@ -264,7 +319,7 @@ function updateProgress(data) {
 async function loadLiveResults() {
     try {
         const response = await fetch(
-            `/api/results/${currentSessionId}?page=${livePage}&limit=${ITEMS_PER_PAGE}&filter=${currentFilter}`
+            `/api/results/${currentSessionId}?page=${livePage}&limit=${ITEMS_PER_PAGE}&filter=${currentFilter}&sort=${currentSort}`
         );
 
         if (!response.ok) {
@@ -322,13 +377,16 @@ function showFinalResults() {
         btn.classList.toggle('active', btn.dataset.filter === 'all');
     });
 
+    // Синхронизируем сортировку с выбранным значением
+    document.querySelectorAll('.sort-select').forEach(s => s.value = currentSort);
+
     loadFinalResults();
 }
 
 async function loadFinalResults() {
     try {
         const response = await fetch(
-            `/api/results/${currentSessionId}?page=${currentPage}&limit=${ITEMS_PER_PAGE}&filter=${currentFilter}`
+            `/api/results/${currentSessionId}?page=${currentPage}&limit=${ITEMS_PER_PAGE}&filter=${currentFilter}&sort=${currentSort}`
         );
 
         if (!response.ok) {
@@ -433,9 +491,21 @@ function renderDiplomas(container, diplomas, isLive) {
             progressPercent = 100;
         }
 
-        // Определяем цвет бара
+        // Определяем цвет бара и кольца
         const barClass = (diploma.status === 'received' || diploma.status === 'issued') ? 'progress-bar-success' :
-            progressPercent > 50 ? 'progress-bar-warning' : 'progress-bar-default';
+            progressPercent >= 75 ? 'progress-bar-almost' :
+                progressPercent > 50 ? 'progress-bar-warning' : 'progress-bar-default';
+
+        // Цвет для SVG кольца
+        const ringColor = (diploma.status === 'received' || diploma.status === 'issued') ? '#10b981' :
+            progressPercent >= 75 ? '#22c55e' :
+                progressPercent > 50 ? '#f59e0b' : '#6366f1';
+
+        // SVG круговой индикатор (обводка кольца)
+        const circumference = 2 * Math.PI * 18; // r=18
+        const strokeDashoffset = circumference - (progressPercent / 100) * circumference;
+
+        const showProgressRing = diploma.status === 'in_progress' && diploma.progress;
 
         return `
         <div class="diploma-card ${diploma.status}" onclick="window.open('${diploma.url}', '_blank')">
@@ -455,11 +525,22 @@ function renderDiplomas(container, diplomas, isLive) {
                 </div>
                 ` : ''}
             </div>
+            ${showProgressRing ? `
+            <div class="diploma-percent-ring" title="${progressPercent}%">
+                <svg viewBox="0 0 44 44">
+                    <circle class="ring-bg" cx="22" cy="22" r="18"/>
+                    <circle class="ring-fill" cx="22" cy="22" r="18"
+                        stroke="${ringColor}"
+                        stroke-dasharray="${circumference}"
+                        stroke-dashoffset="${strokeDashoffset}"/>
+                </svg>
+                <span class="ring-text">${progressPercent}%</span>
+            </div>
+            ` : ''}
             <div class="diploma-status-wrapper">
                 <div class="diploma-status">
                     ${getStatusText(diploma.status)}
                 </div>
-                ${diploma.progress ? `<div class="diploma-progress-badge">${escapeHtml(diploma.progress)}</div>` : ''}
             </div>
             <a class="diploma-link" href="${diploma.url}" target="_blank" onclick="event.stopPropagation();" title="Открыть на HAMLOG">
                 🔗
@@ -530,6 +611,16 @@ function handleNewSearch() {
     searchBtn.querySelector('.btn-text').textContent = 'Проверить';
     callsignInput.value = '';
     callsignInput.focus();
+
+    // Сброс сортировки
+    currentSort = 'progress_desc';
+    document.querySelectorAll('.sort-select').forEach(s => s.value = 'progress_desc');
+
+    // Сброс ETA
+    parseStartTime = null;
+    avgParseTimeMs = null;
+    const etaEl = document.getElementById('progressEta');
+    if (etaEl) etaEl.textContent = '';
 }
 
 // При закрытии вкладки — отмена парсинга
@@ -634,10 +725,34 @@ async function updateServerStatus() {
         if (data.version && appVersion) {
             appVersion.textContent = `v${data.version}`;
         }
+
+        // Обновляем информацию о времени парсинга
+        const timingEl = document.getElementById('serverTimingInfo');
+        if (timingEl) {
+            let timingParts = [];
+
+            if (data.avgParseTime) {
+                timingParts.push(`⏱ Среднее время: ~${formatDuration(data.avgParseTime)}`);
+            }
+
+            if (isBusy && data.estimatedFreeIn !== null && data.estimatedFreeIn !== undefined) {
+                timingParts.push(`🕐 Слот освободится: ~${formatDuration(data.estimatedFreeIn)}`);
+            }
+
+            timingEl.textContent = timingParts.join('  ·  ');
+        }
     } catch (error) {
         statusText.textContent = 'Нет связи';
         statusDot.className = 'status-dot';
     }
+}
+
+function formatDuration(ms) {
+    const totalSec = Math.round(ms / 1000);
+    if (totalSec < 60) return `${totalSec} сек`;
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return sec > 0 ? `${min} мин ${sec} сек` : `${min} мин`;
 }
 
 function startStatusPolling() {
@@ -681,7 +796,7 @@ async function checkOriginStatus() {
 // Changelog Popup
 // ==================================================
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 
 function checkChangelog() {
     const lastSeenVersion = localStorage.getItem('hamlog_last_version');
@@ -723,4 +838,37 @@ document.addEventListener('DOMContentLoaded', () => {
     checkOriginStatus();
     setInterval(checkOriginStatus, 30000);
     checkChangelog();
+    initTheme();
 });
+
+// ==================================================
+// Theme Switching
+// ==================================================
+
+function initTheme() {
+    const saved = localStorage.getItem('hamlog_theme') || 'modern';
+    applyTheme(saved);
+
+    document.getElementById('themeToggle').addEventListener('click', () => {
+        const current = document.documentElement.getAttribute('data-theme');
+        const next = current === 'retro' ? 'modern' : 'retro';
+        applyTheme(next);
+        localStorage.setItem('hamlog_theme', next);
+    });
+}
+
+function applyTheme(theme) {
+    if (theme === 'retro') {
+        document.documentElement.setAttribute('data-theme', 'retro');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+}
+
+// Применяем тему до DOMContentLoaded чтобы не было мигания
+(function () {
+    const saved = localStorage.getItem('hamlog_theme');
+    if (saved === 'retro') {
+        document.documentElement.setAttribute('data-theme', 'retro');
+    }
+})();

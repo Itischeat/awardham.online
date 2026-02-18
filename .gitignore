@@ -2,4 +2,5 @@
 .tmp*
 node_modules
 .agent
-.agent/*
+.agent/workflows
+.agent/skills

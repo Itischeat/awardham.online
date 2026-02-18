@@ -169,6 +169,7 @@ async function disconnect() {
 }
 
 module.exports = {
+    connectRedis,
     readCache,
     writeCache,
     clearCache,

@@ -1133,6 +1133,49 @@ body {
     opacity: 0.7;
 }
 
+/* Telegram Feedback Link */
+.telegram-feedback-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding: 0.6rem 1.25rem;
+    background: rgba(0, 136, 204, 0.1);
+    border: 1px solid rgba(0, 136, 204, 0.25);
+    border-radius: 999px;
+    color: #29b6f6;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.telegram-feedback-link:hover {
+    background: rgba(0, 136, 204, 0.2);
+    border-color: rgba(0, 136, 204, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 136, 204, 0.2);
+    color: #4fc3f7;
+}
+
+.telegram-feedback-link .tg-icon {
+    font-size: 1.1rem;
+}
+
+.footer-feedback {
+    margin-top: 0.5rem;
+}
+
+.footer-tg-link {
+    color: #29b6f6 !important;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.footer-tg-link:hover {
+    color: #4fc3f7 !important;
+}
+
 /* ============================================
    Utilities
    ============================================ */

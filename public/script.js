@@ -306,6 +306,7 @@ function updateProgress(data) {
     const percent = Math.min(data.progress || 0, 100);
 
     progressBar.style.width = `${percent}%`;
+    progressBar.style.setProperty('--progress', Math.max(percent, 1));
     progressText.textContent = `${percent}%`;
     checkedCount.textContent = data.checkedDiplomas || 0;
     totalCount.textContent = data.totalDiplomas || '?';
@@ -520,13 +521,13 @@ function renderDiplomas(container, diplomas, isLive) {
                 </div>
                 ${diploma.progress || diploma.status === 'received' || diploma.status === 'issued' ? `
                 <div class="diploma-progress-bar-container">
-                    <div class="diploma-progress-bar ${barClass}" style="width: ${progressPercent}%"></div>
+                    <div class="diploma-progress-bar ${barClass}" style="width: ${progressPercent}%; --progress: ${Math.max(progressPercent, 1)}"></div>
                     <span class="diploma-progress-text">${progressText || ((diploma.status === 'received' || diploma.status === 'issued') ? 'Выполнено!' : '')}</span>
                 </div>
                 ` : ''}
             </div>
             ${showProgressRing ? `
-            <div class="diploma-percent-ring" title="${progressPercent}%">
+            <div class="diploma-percent-ring" title="${progressPercent}%" style="--progress: ${progressPercent}">
                 <svg viewBox="0 0 44 44">
                     <circle class="ring-bg" cx="22" cy="22" r="18"/>
                     <circle class="ring-fill" cx="22" cy="22" r="18"

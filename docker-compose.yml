@@ -33,6 +33,15 @@ services:
     networks:
       - hamlog-network
 
+  bot:
+    build: ./telegram-bot
+    env_file:
+      - ./telegram-bot/.env
+    networks:
+      - hamlog-network
+    depends_on:
+      - redis
+
 networks:
   hamlog-network:
     driver: bridge

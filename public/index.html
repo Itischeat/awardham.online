@@ -68,6 +68,18 @@
                         <span class="status-text" id="statusText">Загрузка...</span>
                     </div>
                     <div class="server-timing-info" id="serverTimingInfo"></div>
+
+                    <a href="https://boosty.to/reggullar/donate" target="_blank" class="telegram-feedback-link"
+                        id="telegramFeedback">
+                        <span class="tg-icon">💰</span>
+                        <span>Поддержать разработчика</span>
+                    </a>
+
+                    <a href="https://t.me/awardham_bot" target="_blank" class="telegram-feedback-link"
+                        id="telegramFeedback">
+                        <span class="tg-icon">✈️</span>
+                        <span>Обратная связь в Telegram</span>
+                    </a>
                 </div>
             </section>
 
@@ -120,7 +132,7 @@
                         <div class="stat-icon">🏆</div>
                         <div class="stat-info">
                             <span class="stat-number" id="liveStatReceived">0</span>
-                            <span class="stat-label">Получено</span>
+                            <span class="stat-label">На получение</span>
                         </div>
                     </div>
                     <div class="stat-card stat-progress">
@@ -151,7 +163,7 @@
                     <div class="filters">
                         <button class="filter-btn active" data-filter="all">Все</button>
                         <button class="filter-btn" data-filter="issued">📜 Выдано</button>
-                        <button class="filter-btn" data-filter="received">🏆 Получено</button>
+                        <button class="filter-btn" data-filter="received">🏆 На получение</button>
                         <button class="filter-btn" data-filter="in_progress">⏳ В процессе</button>
                         <button class="filter-btn" data-filter="not_received">📋 Не получено</button>
                         <button class="filter-btn" data-filter="error">⚠️ Ошибки</button>
@@ -211,7 +223,7 @@
                         <div class="stat-icon">🏆</div>
                         <div class="stat-info">
                             <span class="stat-number" id="statReceived">0</span>
-                            <span class="stat-label">Получено</span>
+                            <span class="stat-label">На получение</span>
                         </div>
                     </div>
                     <div class="stat-card stat-progress">
@@ -242,7 +254,7 @@
                     <div class="filters" id="finalFilters">
                         <button class="filter-btn active" data-filter="all">Все</button>
                         <button class="filter-btn" data-filter="issued">📜 Выдано</button>
-                        <button class="filter-btn" data-filter="received">🏆 Получено</button>
+                        <button class="filter-btn" data-filter="received">🏆 На получение</button>
                         <button class="filter-btn" data-filter="in_progress">⏳ В процессе</button>
                         <button class="filter-btn" data-filter="not_received">📋 Не получено</button>
                         <button class="filter-btn" data-filter="error">⚠️ Ошибки</button>
@@ -281,6 +293,9 @@
         <!-- Footer -->
         <footer class="footer">
             <p>Данные с <a href="https://hamlog.online" target="_blank">HAMLOG.online</a></p>
+            <p class="footer-feedback">
+                <a href="https://t.me/awardham_bot" target="_blank" class="footer-tg-link">✈️ Обратная связь</a>
+            </p>
             <p class="copyright">© 2026 Ham Radio Diplomas Checker</p>
         </footer>
     </div>
@@ -314,6 +329,20 @@
                         <div>
                             <strong>Время парсинга</strong>
                             <p>Среднее время и обратный отсчёт при парсинге</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="changelog-emoji">✈️</span>
+                        <div>
+                            <strong>Обратная связь в Telegram</strong>
+                            <p>Возможность оставить отзыв или предложение разработчику</p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="changelog-emoji">💰</span>
+                        <div>
+                            <strong>Поддержка автора</strong>
+                            <p>Добавленна возможность поддержать автора и проект</p>
                         </div>
                     </li>
                 </ul>

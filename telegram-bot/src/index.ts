@@ -54,14 +54,17 @@ try {
                 switch (state.state) {
                     case "review":
                         bot.api.sendMessage(creatorChatId, `Отзыв от ${ctx.chat.username}: ${ctx.msg.text}`);
+                        ctx.reply("Спасибо за отзыв!");
                         await storage.delete(ctx.chat.id.toString());
                         break;
                     case "error":
                         bot.api.sendMessage(creatorChatId, `Ошибка от ${ctx.chat.username}: ${ctx.msg.text}`);
+                        ctx.reply("Спасибо за сообщение об ошибке!");
                         await storage.delete(ctx.chat.id.toString());
                         break;
                     case "suggestion":
                         bot.api.sendMessage(creatorChatId, `Предложение от ${ctx.chat.username}: ${ctx.msg.text}`);
+                        ctx.reply("Спасибо за предложение!");
                         await storage.delete(ctx.chat.id.toString());
                         break;
                 }
